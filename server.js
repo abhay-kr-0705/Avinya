@@ -13,16 +13,18 @@ dotenv.config();
 console.log('Starting server...');
 console.log('Environment variables loaded');
 console.log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
-console.log('PORT:', process.env.PORT || 5002);
+console.log('PORT:', process.env.PORT || 3000);
 
 const app = express();
 
 // CORS middleware configuration
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001'],
+  origin: ['https://genx-developers-club.netlify.app', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 // Body parser middleware
@@ -77,13 +79,13 @@ async function connectDB() {
 }
 
 // Start server
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 3000;
 
 connectDB().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`API available at http://localhost:${PORT}/api`);
-    console.log('CORS enabled for:', ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001']);
+    console.log('CORS enabled for:', ['https://genx-developers-club.netlify.app', 'http://localhost:5173']);
   });
 }).catch(err => {
   console.error('Failed to start server:', err);
