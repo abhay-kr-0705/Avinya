@@ -46,38 +46,46 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Create new user with formatted mobile number
-    const user = await User.create({
+    // Create user
+    const user = new User({
       email,
       password,
       name,
       registration_no,
       branch,
       semester,
-      mobile: mobile.trim() // Keep the original format but remove any extra spaces
+      mobile: mobile.trim()
     });
+
+    // Check if user should be admin
+    if (email === 'abhayk7481@gmail.com' || email === 'genx.gdc@gmail.com') {
+      user.isAdmin = true;
+      user.role = 'admin';
+    }
+
+    await user.save();
 
     // Create token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '30d'
-    });
-
-    // Remove password from response
-    const userResponse = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      registration_no: user.registration_no,
-      branch: user.branch,
-      semester: user.semester,
-      mobile: user.mobile,
-      role: user.role
-    };
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
 
     res.status(201).json({
       success: true,
       token,
-      user: userResponse
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        registration_no: user.registration_no,
+        branch: user.branch,
+        semester: user.semester,
+        mobile: user.mobile,
+        isAdmin: user.isAdmin,
+        role: user.role
+      }
     });
   } catch (err) {
     console.error('Registration error:', err);
@@ -131,7 +139,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Check if user exists and include password in the query
+    // Check for user
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(401).json({ 
@@ -140,7 +148,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Check if password matches
+    // Check password
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({ 
@@ -149,27 +157,34 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Create token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '30d'
-    });
+    // Update admin status if needed
+    if (email === 'abhayk7481@gmail.com' || email === 'genx.gdc@gmail.com') {
+      user.isAdmin = true;
+      user.role = 'admin';
+      await user.save();
+    }
 
-    // Remove password from response
-    const userResponse = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      registration_no: user.registration_no,
-      branch: user.branch,
-      semester: user.semester,
-      mobile: user.mobile,
-      role: user.role
-    };
+    // Create token
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
 
     res.json({
       success: true,
       token,
-      user: userResponse
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        registration_no: user.registration_no,
+        branch: user.branch,
+        semester: user.semester,
+        mobile: user.mobile,
+        isAdmin: user.isAdmin,
+        role: user.role
+      }
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -185,6 +200,14 @@ router.post('/login', async (req, res) => {
 router.get('/me', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
+    
+    // Update admin status if needed
+    if (user.email === 'abhayk7481@gmail.com' || user.email === 'genx.gdc@gmail.com') {
+      user.isAdmin = true;
+      user.role = 'admin';
+      await user.save();
+    }
+    
     res.json(user);
   } catch (err) {
     console.error('Get current user error:', err);

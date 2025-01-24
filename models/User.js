@@ -58,6 +58,10 @@ const userSchema = new mongoose.Schema({
       message: 'Please enter a valid mobile number'
     }
   },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
   role: {
     type: String,
     enum: {
