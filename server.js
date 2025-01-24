@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
+// Import routes
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events');
 const resourceRoutes = require('./routes/resources');
@@ -10,43 +12,30 @@ const adminRoutes = require('./routes/admin');
 
 // Load environment variables
 dotenv.config();
-console.log('Starting server...');
-console.log('Environment variables loaded');
-console.log('MongoDB URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
-console.log('PORT:', process.env.PORT || 3000);
 
 const app = express();
 
-// Enable CORS for all routes
-app.use(cors({
-  origin: 'https://genx-developers-club.netlify.app',
+// CORS configuration
+const corsOptions = {
+  origin: ['https://genx-developers-club.netlify.app', 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-}));
+};
 
-// Additional headers for CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://genx-developers-club.netlify.app');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(204).send();
-  }
-  next();
-});
+app.use(cors(corsOptions));
 
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
+// Health check endpoint (before routes)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'Server is running',
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
 });
 
 // API routes
@@ -56,29 +45,26 @@ app.use('/api/resources', resourceRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok',
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    status: 'error',
+    message: `Route ${req.originalUrl} not found`
   });
 });
 
-// Error handling middleware
+// Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(500).json({ message: err.message || 'Internal Server Error' });
+  res.status(err.status || 500).json({
+    status: 'error',
+    message: err.message || 'Internal Server Error'
+  });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
-
-// Connect to MongoDB
+// MongoDB connection
 async function connectDB() {
   try {
-    console.log('Attempting to connect to MongoDB...');
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true
@@ -97,7 +83,7 @@ connectDB().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`API available at http://localhost:${PORT}/api`);
-    console.log('CORS enabled for:', ['https://genx-developers-club.netlify.app', 'http://localhost:5173']);
+    console.log('CORS enabled for:', corsOptions.origin);
   });
 }).catch(err => {
   console.error('Failed to start server:', err);
