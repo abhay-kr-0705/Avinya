@@ -92,8 +92,30 @@ router.delete('/events/:id', async (req, res) => {
 // Get all users
 router.get('/users', async (req, res) => {
   try {
-    const users = await User.find().select('-password');
-    res.json(users);
+    const { search, page = 1, limit = 10 } = req.query;
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { registration_no: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const total = await User.countDocuments(query);
+    const users = await User.find(query)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    res.json({
+      users,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ message: 'Server error' });
@@ -143,31 +165,20 @@ router.put('/users/:id/role', async (req, res) => {
 // Get dashboard statistics
 router.get('/stats', async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({
-      last_login: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+    const totalMembers = await User.countDocuments();
+    const upcomingEvents = await Event.countDocuments({
+      date: { $gt: new Date() }
     });
     const totalEvents = await Event.countDocuments();
-    const upcomingEvents = await Event.countDocuments({
-      date: { $gte: new Date() }
-    });
 
     res.json({
-      success: true,
-      data: {
-        totalUsers,
-        activeUsers,
-        totalEvents,
-        upcomingEvents
-      }
+      totalMembers,
+      totalEvents,
+      upcomingEvents
     });
-  } catch (err) {
-    console.error('Error fetching dashboard stats:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching dashboard statistics',
-      error: err.message
-    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
