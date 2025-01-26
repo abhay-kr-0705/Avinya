@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const auth = async (req, res, next) => {
+// Protect routes
+exports.protect = async (req, res, next) => {
   try {
     // Get token from header
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -33,4 +34,17 @@ const auth = async (req, res, next) => {
   }
 };
 
-module.exports = auth;
+// Grant access to specific roles
+exports.authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized for this role' });
+    }
+
+    next();
+  };
+};

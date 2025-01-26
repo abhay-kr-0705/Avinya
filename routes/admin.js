@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const Event = require('../models/Event');
 const User = require('../models/User');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const isAdmin = require('../middleware/admin');
 
 // Apply middleware to all routes
-router.use(auth);
+router.use(protect);
 router.use(isAdmin);
 
 // Get all events with registration counts
