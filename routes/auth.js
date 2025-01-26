@@ -116,17 +116,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Fetch all users
-router.get('/users', protect, async (req, res) => {
-  try {
-    const users = await User.find();
-    res.status(200).json(users);
-  } catch (err) {
-    console.error('Error fetching users:', err);
-    res.status(500).json({ message: 'Error fetching users' });
-  }
-});
-
 // Login user
 router.post('/login', async (req, res) => {
   try {
