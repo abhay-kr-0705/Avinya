@@ -36,10 +36,6 @@ const eventSchema = new mongoose.Schema({
     type: Date,
     required: [true, 'Please add an end date']
   },
-  time: {
-    type: String,
-    required: [true, 'Please add a time']
-  },
   venue: {
     type: String,
     required: [true, 'Please add a venue']
@@ -48,11 +44,6 @@ const eventSchema = new mongoose.Schema({
     type: String,
     enum: ['upcoming', 'past'],
     required: [true, 'Please specify event type']
-  },
-  status: {
-    type: String,
-    enum: ['upcoming', 'past'],
-    default: 'upcoming'
   },
   registrations: {
     type: [registrationSchema],
@@ -87,7 +78,6 @@ eventSchema.index({ created_at: -1 });
 // Update timestamps on save
 eventSchema.pre('save', function(next) {
   this.updated_at = Date.now();
-  this.status = new Date(this.date) > new Date() ? 'upcoming' : 'past';
   next();
 });
 

@@ -1,129 +1,49 @@
 const express = require('express');
 const router = express.Router();
-const Event = require('../models/Event');
 const User = require('../models/User');
-const { protect } = require('../middleware/auth');
-const isAdmin = require('../middleware/admin');
+const Event = require('../models/Event');
+const { protect, authorize } = require('../middleware/auth');
 
-// Apply middleware to all routes
-router.use(protect);
-router.use(isAdmin);
-
-// Get all events with registration counts
-router.get('/events', async (req, res) => {
-  try {
-    const events = await Event.find().sort({ date: -1 });
-    const eventsWithRegistrations = await Promise.all(
-      events.map(async (event) => {
-        const registrations = await Event.countDocuments({ _id: event._id });
-        return {
-          ...event.toObject(),
-          registrations,
-        };
-      })
-    );
-    res.json(eventsWithRegistrations);
-  } catch (error) {
-    console.error('Error fetching events:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Create new event
-router.post('/events', async (req, res) => {
-  try {
-    const { title, description, date, time, venue } = req.body;
-    const event = new Event({
-      title,
-      description,
-      date,
-      time,
-      venue,
-      status: new Date(date) > new Date() ? 'upcoming' : 'past',
+// Error handler wrapper
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch((error) => {
+    console.error('Detailed error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
     });
-    await event.save();
-    res.status(201).json(event);
-  } catch (error) {
-    console.error('Error creating event:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  });
 
-// Update event
-router.put('/events/:id', async (req, res) => {
-  try {
-    const { title, description, date, time, venue } = req.body;
-    const event = await Event.findByIdAndUpdate(
-      req.params.id,
-      {
-        title,
-        description,
-        date,
-        time,
-        venue,
-        status: new Date(date) > new Date() ? 'upcoming' : 'past',
-      },
-      { new: true }
-    );
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-    res.json(event);
-  } catch (error) {
-    console.error('Error updating event:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Delete event
-router.delete('/events/:id', async (req, res) => {
-  try {
-    const event = await Event.findByIdAndDelete(req.params.id);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-    res.json({ message: 'Event deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting event:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+// Protect all admin routes
+router.use(protect);
+router.use(authorize('admin', 'superadmin'));
 
 // Get all users
-router.get('/users', async (req, res) => {
+router.get('/users', asyncHandler(async (req, res) => {
   try {
-    const { search, page = 1, limit = 10 } = req.query;
-    const query = {};
-
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { registration_no: { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    const total = await User.countDocuments(query);
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-
+    const users = await User.find().select('-password');
     res.json({
-      users,
-      total,
-      page: parseInt(page),
-      totalPages: Math.ceil(total / limit)
+      success: true,
+      count: users.length,
+      data: users
     });
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Server error' });
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching users',
+      error: err.message
+    });
   }
-});
+}));
 
 // Update user role
-router.put('/users/:id/role', async (req, res) => {
+router.put('/users/:id/role', protect, authorize('superadmin'), asyncHandler(async (req, res) => {
   try {
     const { role } = req.body;
     const { id } = req.params;
@@ -160,30 +80,41 @@ router.put('/users/:id/role', async (req, res) => {
       error: err.message
     });
   }
-});
+}));
 
 // Get dashboard statistics
-router.get('/stats', async (req, res) => {
+router.get('/stats', asyncHandler(async (req, res) => {
   try {
-    const totalMembers = await User.countDocuments();
-    const upcomingEvents = await Event.countDocuments({
-      date: { $gt: new Date() }
+    const totalUsers = await User.countDocuments();
+    const activeUsers = await User.countDocuments({
+      last_login: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
     });
     const totalEvents = await Event.countDocuments();
+    const upcomingEvents = await Event.countDocuments({
+      date: { $gte: new Date() }
+    });
 
     res.json({
-      totalMembers,
-      totalEvents,
-      upcomingEvents
+      success: true,
+      data: {
+        totalUsers,
+        activeUsers,
+        totalEvents,
+        upcomingEvents
+      }
     });
-  } catch (error) {
-    console.error('Error fetching stats:', error);
-    res.status(500).json({ message: 'Server error' });
+  } catch (err) {
+    console.error('Error fetching dashboard stats:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching dashboard statistics',
+      error: err.message
+    });
   }
-});
+}));
 
 // Get all events with registration details
-router.get('/events/all', async (req, res) => {
+router.get('/events', asyncHandler(async (req, res) => {
   try {
     const events = await Event.find()
       .populate({
@@ -211,10 +142,10 @@ router.get('/events/all', async (req, res) => {
       error: err.message
     });
   }
-});
+}));
 
 // Get event registrations
-router.get('/events/:id/registrations', async (req, res) => {
+router.get('/events/:id/registrations', asyncHandler(async (req, res) => {
   try {
     const event = await Event.findById(req.params.id)
       .populate({
@@ -242,6 +173,77 @@ router.get('/events/:id/registrations', async (req, res) => {
       error: err.message
     });
   }
-});
+}));
+
+// Create new event
+router.post('/events', asyncHandler(async (req, res) => {
+  try {
+    const event = await Event.create(req.body);
+    res.status(201).json({
+      success: true,
+      data: event
+    });
+  } catch (err) {
+    console.error('Error creating event:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating event',
+      error: err.message
+    });
+  }
+}));
+
+// Update event
+router.put('/events/:id', asyncHandler(async (req, res) => {
+  try {
+    const { name, description, start_date, end_date, venue } = req.body;
+    
+    let event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ msg: 'Event not found' });
+    }
+
+    event.name = name;
+    event.description = description;
+    event.start_date = start_date;
+    event.end_date = end_date;
+    event.venue = venue;
+
+    await event.save();
+    res.json(event);
+  } catch (error) {
+    console.error(error);
+    if (error.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Event not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+}));
+
+// Delete event
+router.delete('/events/:id', asyncHandler(async (req, res) => {
+  try {
+    const event = await Event.findByIdAndDelete(req.params.id);
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Event deleted successfully'
+    });
+  } catch (err) {
+    console.error('Error deleting event:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting event',
+      error: err.message
+    });
+  }
+}));
 
 module.exports = router;
