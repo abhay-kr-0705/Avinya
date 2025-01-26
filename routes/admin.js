@@ -116,24 +116,11 @@ router.get('/stats', asyncHandler(async (req, res) => {
 // Get all events with registration details
 router.get('/events', asyncHandler(async (req, res) => {
   try {
-    const events = await Event.find()
-      .populate({
-        path: 'registrations.user',
-        select: 'name email registration_no branch semester mobile role'
-      })
-      .sort({ date: -1 });
-
-    // Transform the data to include registration count
-    const transformedEvents = events.map(event => ({
-      ...event.toObject(),
-      registrationCount: event.registrations ? event.registrations.length : 0
-    }));
-
-    res.json({
-      success: true,
-      count: events.length,
-      data: transformedEvents
-    });
+    const events = await Event.find().lean();
+    if (!events) {
+      return res.json([]);
+    }
+    res.json(events);
   } catch (err) {
     console.error('Error fetching events:', err);
     res.status(500).json({
