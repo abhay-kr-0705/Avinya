@@ -69,40 +69,63 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
   }
 });
 
-// Register for event
-router.post('/:id/register', async (req, res) => {
+// Register for an event
+router.post('/register', async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const { userId, eventId, name, email, registration_no, mobile_no, semester } = req.body;
+
+    // Validate required fields
+    if (!userId || !eventId || !name || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields'
+      });
+    }
+
+    // Find the event
+    const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
     }
 
-    // Check if already registered with the same email
-    const existingReg = await EventRegistration.findOne({
-      event: req.params.id,
-      email: req.body.email
-    });
+    // Check if user is already registered
+    const existingRegistration = event.registrations.find(
+      reg => reg.userId.toString() === userId || reg.email === email
+    );
 
-    if (existingReg) {
-      return res.status(400).json({ message: 'Already registered for this event with this email' });
+    if (existingRegistration) {
+      return res.status(400).json({
+        success: false,
+        message: 'You are already registered for this event'
+      });
     }
 
-    const registration = await EventRegistration.create({
-      event: req.params.id,
-      name: req.body.name,
-      email: req.body.email,
-      registration_no: req.body.registration_no,
-      mobile_no: req.body.mobile_no,
-      status: 'registered'
+    // Add registration to event
+    event.registrations.push({
+      userId,
+      name,
+      email,
+      registration_no,
+      mobile_no,
+      semester,
+      registeredAt: new Date()
     });
 
-    // Send confirmation email
-    await sendEventConfirmation(req.body.email, event, registration);
+    await event.save();
 
-    res.status(201).json(registration);
-  } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(200).json({
+      success: true,
+      message: 'Successfully registered for the event'
+    });
+  } catch (error) {
+    console.error('Error in event registration:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
   }
 });
 

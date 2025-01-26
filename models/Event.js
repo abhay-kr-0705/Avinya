@@ -1,22 +1,5 @@
 const mongoose = require('mongoose');
 
-const registrationSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  registered_at: {
-    type: Date,
-    default: Date.now
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'confirmed', 'cancelled'],
-    default: 'pending'
-  }
-}, { _id: false });
-
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -45,10 +28,28 @@ const eventSchema = new mongoose.Schema({
     enum: ['upcoming', 'past'],
     required: [true, 'Please specify event type']
   },
-  registrations: {
-    type: [registrationSchema],
-    default: []
-  },
+  registrations: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    name: {
+      type: String,
+      required: true
+    },
+    email: {
+      type: String,
+      required: true
+    },
+    registration_no: String,
+    mobile_no: String,
+    semester: String,
+    registeredAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   created_at: {
     type: Date,
     default: Date.now
