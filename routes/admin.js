@@ -3,11 +3,11 @@ const router = express.Router();
 const Event = require('../models/Event');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
-const admin = require('../middleware/admin');
+const isAdmin = require('../middleware/admin');
 
-// Protect all admin routes
+// Apply middleware to all routes
 router.use(auth);
-router.use(admin);
+router.use(isAdmin);
 
 // Get all events with registration counts
 router.get('/events', async (req, res) => {
