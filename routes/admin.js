@@ -113,21 +113,14 @@ router.get('/stats', asyncHandler(async (req, res) => {
   }
 }));
 
-// Get all events with registration details
+// Get all events with registration counts
 router.get('/events', asyncHandler(async (req, res) => {
   try {
     const events = await Event.find().lean();
-    if (!events) {
-      return res.json([]);
-    }
-    res.json(events);
+    res.json(events || []);
   } catch (err) {
     console.error('Error fetching events:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching events',
-      error: err.message
-    });
+    res.status(500).json({ error: 'Server Error' });
   }
 }));
 
@@ -165,18 +158,21 @@ router.get('/events/:id/registrations', asyncHandler(async (req, res) => {
 // Create new event
 router.post('/events', asyncHandler(async (req, res) => {
   try {
-    const event = await Event.create(req.body);
-    res.status(201).json({
-      success: true,
-      data: event
+    const { name, description, start_date, end_date, venue } = req.body;
+    
+    const event = new Event({
+      name,
+      description,
+      start_date,
+      end_date,
+      venue
     });
+
+    const savedEvent = await event.save();
+    res.json(savedEvent.toObject());
   } catch (err) {
     console.error('Error creating event:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error creating event',
-      error: err.message
-    });
+    res.status(500).json({ error: 'Server Error' });
   }
 }));
 
@@ -187,7 +183,7 @@ router.put('/events/:id', asyncHandler(async (req, res) => {
     
     let event = await Event.findById(req.params.id);
     if (!event) {
-      return res.status(404).json({ msg: 'Event not found' });
+      return res.status(404).json({ error: 'Event not found' });
     }
 
     event.name = name;
@@ -196,40 +192,33 @@ router.put('/events/:id', asyncHandler(async (req, res) => {
     event.end_date = end_date;
     event.venue = venue;
 
-    await event.save();
-    res.json(event);
-  } catch (error) {
-    console.error(error);
-    if (error.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Event not found' });
+    const updatedEvent = await event.save();
+    res.json(updatedEvent.toObject());
+  } catch (err) {
+    console.error('Error updating event:', err);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ error: 'Event not found' });
     }
-    res.status(500).send('Server Error');
+    res.status(500).json({ error: 'Server Error' });
   }
 }));
 
 // Delete event
 router.delete('/events/:id', asyncHandler(async (req, res) => {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
-
+    const event = await Event.findById(req.params.id);
     if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
+      return res.status(404).json({ error: 'Event not found' });
     }
 
-    res.json({
-      success: true,
-      message: 'Event deleted successfully'
-    });
+    await event.deleteOne();
+    res.json({ message: 'Event removed' });
   } catch (err) {
     console.error('Error deleting event:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Error deleting event',
-      error: err.message
-    });
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    res.status(500).json({ error: 'Server Error' });
   }
 }));
 
