@@ -113,14 +113,34 @@ router.get('/stats', asyncHandler(async (req, res) => {
   }
 }));
 
-// Get all events with registration counts
+// Get all events with registration details
 router.get('/events', asyncHandler(async (req, res) => {
   try {
-    const events = await Event.find().lean();
-    res.json(events || []);
+    const events = await Event.find()
+      .populate({
+        path: 'registrations.user',
+        select: 'name email registration_no branch semester mobile role'
+      })
+      .sort({ date: -1 });
+
+    // Transform the data to include registration count
+    const transformedEvents = events.map(event => ({
+      ...event.toObject(),
+      registrationCount: event.registrations ? event.registrations.length : 0
+    }));
+
+    res.json({
+      success: true,
+      count: events.length,
+      data: transformedEvents
+    });
   } catch (err) {
     console.error('Error fetching events:', err);
-    res.status(500).json({ error: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching events',
+      error: err.message
+    });
   }
 }));
 
@@ -158,67 +178,74 @@ router.get('/events/:id/registrations', asyncHandler(async (req, res) => {
 // Create new event
 router.post('/events', asyncHandler(async (req, res) => {
   try {
-    const { name, description, start_date, end_date, venue } = req.body;
-    
-    const event = new Event({
-      name,
-      description,
-      start_date,
-      end_date,
-      venue
+    const event = await Event.create(req.body);
+    res.status(201).json({
+      success: true,
+      data: event
     });
-
-    const savedEvent = await event.save();
-    res.json(savedEvent.toObject());
   } catch (err) {
     console.error('Error creating event:', err);
-    res.status(500).json({ error: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Error creating event',
+      error: err.message
+    });
   }
 }));
 
 // Update event
 router.put('/events/:id', asyncHandler(async (req, res) => {
   try {
-    const { name, description, start_date, end_date, venue } = req.body;
-    
-    let event = await Event.findById(req.params.id);
+    const event = await Event.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
     }
 
-    event.name = name;
-    event.description = description;
-    event.start_date = start_date;
-    event.end_date = end_date;
-    event.venue = venue;
-
-    const updatedEvent = await event.save();
-    res.json(updatedEvent.toObject());
+    res.json({
+      success: true,
+      data: event
+    });
   } catch (err) {
     console.error('Error updating event:', err);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-    res.status(500).json({ error: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Error updating event',
+      error: err.message
+    });
   }
 }));
 
 // Delete event
 router.delete('/events/:id', asyncHandler(async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findByIdAndDelete(req.params.id);
+
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
     }
 
-    await event.deleteOne();
-    res.json({ message: 'Event removed' });
+    res.json({
+      success: true,
+      message: 'Event deleted successfully'
+    });
   } catch (err) {
     console.error('Error deleting event:', err);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-    res.status(500).json({ error: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting event',
+      error: err.message
+    });
   }
 }));
 
