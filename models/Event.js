@@ -3,30 +3,27 @@ const mongoose = require('mongoose');
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Please add a title'],
-    trim: true,
-    maxlength: [100, 'Title cannot be more than 100 characters']
+    required: true
   },
   description: {
     type: String,
-    required: [true, 'Please add a description']
+    required: true
   },
   date: {
     type: Date,
-    required: [true, 'Please add a start date']
+    required: true
   },
   end_date: {
-    type: Date,
-    required: [true, 'Please add an end date']
+    type: Date
   },
   venue: {
     type: String,
-    required: [true, 'Please add a venue']
+    required: true
   },
   type: {
     type: String,
     enum: ['upcoming', 'past'],
-    required: [true, 'Please specify event type']
+    required: true
   },
   registrations: [{
     userId: {
@@ -45,23 +42,19 @@ const eventSchema = new mongoose.Schema({
     registration_no: String,
     mobile_no: String,
     semester: String,
-    registeredAt: {
+    registrationDate: {
       type: Date,
       default: Date.now
     }
   }],
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
+  createdAt: {
     type: Date,
     default: Date.now
   }
 }, {
   timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
   },
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
@@ -74,11 +67,11 @@ eventSchema.virtual('registrationCount').get(function() {
 
 // Add index for better query performance
 eventSchema.index({ date: 1, type: 1 });
-eventSchema.index({ created_at: -1 });
+eventSchema.index({ createdAt: -1 });
 
 // Update timestamps on save
 eventSchema.pre('save', function(next) {
-  this.updated_at = Date.now();
+  this.updatedAt = Date.now();
   next();
 });
 
