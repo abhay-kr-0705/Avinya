@@ -10,11 +10,11 @@ router.get('/', async (req, res) => {
   try {
     const events = await Event.find()
       .sort({ date: 1 })
-      .select('-registrations');
+      .lean();
     res.json(events);
   } catch (error) {
     console.error('Error fetching events:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching events', error: error.message });
   }
 });
 
@@ -28,6 +28,89 @@ router.get('/:id', protect, async (req, res) => {
     res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// Get user registrations
+router.get('/user-registrations', protect, async (req, res) => {
+  try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const userId = req.user._id;
+    const registeredEvents = await Event.find({ 'registrations.userId': userId })
+      .select('_id title date registrations')
+      .lean();
+
+    const registrations = registeredEvents.map(event => {
+      const registration = event.registrations.find(reg => 
+        reg.userId.toString() === userId.toString()
+      );
+      return {
+        eventId: event._id,
+        userId: userId,
+        eventTitle: event.title,
+        date: event.date,
+        registrationDate: registration?.registrationDate
+      };
+    });
+
+    res.json(registrations);
+  } catch (error) {
+    console.error('Error fetching user registrations:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Register for event
+router.post('/register', protect, async (req, res) => {
+  try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const { eventId } = req.body;
+    if (!eventId) {
+      return res.status(400).json({ message: 'Event ID is required' });
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const userId = req.user._id;
+    const isRegistered = event.registrations.some(reg => 
+      reg.userId.toString() === userId.toString()
+    );
+
+    if (isRegistered) {
+      return res.status(400).json({ message: 'Already registered for this event' });
+    }
+
+    // Get user data from req.user
+    const registration = {
+      userId: userId,
+      name: req.user.name,
+      email: req.user.email,
+      registration_no: req.user.registration_no || '',
+      mobile_no: req.user.mobile_no || '',
+      semester: req.user.semester || '',
+      registrationDate: new Date()
+    };
+
+    event.registrations.push(registration);
+    await event.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Successfully registered for the event',
+      registration
+    });
+  } catch (error) {
+    console.error('Error registering for event:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -94,94 +177,10 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
   }
 });
 
-// Get user registrations
-router.get('/user-registrations', protect, async (req, res) => {
-  try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
-
-    const userId = req.user._id;
-    const events = await Event.find({ 'registrations.userId': userId })
-      .select('_id title date registrations')
-      .lean();
-    
-    const registrations = events.map(event => {
-      const registration = event.registrations.find(reg => 
-        reg.userId.toString() === userId.toString()
-      );
-      
-      return {
-        eventId: event._id,
-        userId: userId,
-        eventTitle: event.title,
-        date: event.date,
-        registrationDate: registration?.registrationDate
-      };
-    });
-    
-    res.json(registrations);
-  } catch (error) {
-    console.error('Error fetching user registrations:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Register for an event
-router.post('/register', protect, async (req, res) => {
-  try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-
-    const { eventId, name, email, registration_no, mobile_no, semester } = req.body;
-    const userId = req.user._id;
-
-    // Validate required fields
-    if (!eventId || !name || !email) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    const event = await Event.findById(eventId);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    // Check if user is already registered
-    const isRegistered = event.registrations.some(reg => 
-      reg.userId.toString() === userId.toString()
-    );
-    if (isRegistered) {
-      return res.status(400).json({ message: 'Already registered for this event' });
-    }
-
-    // Add registration
-    event.registrations.push({
-      userId,
-      name,
-      email,
-      registration_no,
-      mobile_no,
-      semester,
-      registrationDate: new Date()
-    });
-
-    await event.save();
-    res.json({ success: true, message: 'Successfully registered for the event' });
-  } catch (error) {
-    console.error('Error registering for event:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // Get dashboard stats
 router.get('/dashboard/stats', protect, async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
-
-    if (!req.user.isAdmin && req.user.role !== 'admin') {
+    if (!req.user || (!req.user.isAdmin && req.user.role !== 'admin')) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -193,7 +192,7 @@ router.get('/dashboard/stats', protect, async (req, res) => {
       Event.countDocuments({ date: { $lte: now } }),
       Event.aggregate([
         { $unwind: { path: '$registrations', preserveNullAndEmptyArrays: true } },
-        { $group: { _id: null, total: { $sum: { $cond: [{ $ifNull: ['$registrations', false] }, 1, 0] } } } }
+        { $group: { _id: null, total: { $sum: 1 } } }
       ])
     ]);
 
