@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   description: {
     type: String,
@@ -50,6 +51,10 @@ const eventSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: {
@@ -69,9 +74,9 @@ eventSchema.virtual('registrationCount').get(function() {
 eventSchema.index({ date: 1, type: 1 });
 eventSchema.index({ createdAt: -1 });
 
-// Update timestamps on save
+// Pre-save middleware to update timestamps
 eventSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
+  this.updatedAt = new Date();
   next();
 });
 

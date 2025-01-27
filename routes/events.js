@@ -8,10 +8,13 @@ const { sendEventConfirmation } = require('../utils/email');
 // Get all events (public access)
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find().sort({ start_date: 1 });
+    const events = await Event.find()
+      .sort({ date: 1 })
+      .select('-registrations.userId -registrations.email -registrations.registration_no -registrations.mobile_no -registrations.semester');
     res.json(events);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -25,6 +28,20 @@ router.get('/:id', protect, async (req, res) => {
     res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// Get admin events
+router.get('/admin/events', protect, async (req, res) => {
+  try {
+    if (!req.user || !req.user.isAdmin) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    const events = await Event.find().sort({ date: 1 });
+    res.json(events);
+  } catch (error) {
+    console.error('Error fetching admin events:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -77,13 +94,15 @@ router.get('/user-registrations', protect, async (req, res) => {
     }
 
     const userId = req.user._id;
-    const events = await Event.find({ 'registrations.userId': userId });
+    const events = await Event.find({ 'registrations.userId': userId })
+      .select('_id title date registrations.$');
     
     const registrations = events.map(event => ({
       eventId: event._id,
       userId: userId,
       eventTitle: event.title,
-      date: event.date
+      date: event.date,
+      registrationDate: event.registrations[0]?.registrationDate
     }));
     
     res.json(registrations);
@@ -134,6 +153,34 @@ router.post('/register', protect, async (req, res) => {
     res.json({ success: true, message: 'Successfully registered for the event' });
   } catch (error) {
     console.error('Error registering for event:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get dashboard stats
+router.get('/dashboard/stats', protect, async (req, res) => {
+  try {
+    if (!req.user || !req.user.isAdmin) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    const now = new Date();
+    const totalEvents = await Event.countDocuments();
+    const upcomingEvents = await Event.countDocuments({ date: { $gt: now } });
+    const pastEvents = await Event.countDocuments({ date: { $lte: now } });
+    const totalRegistrations = await Event.aggregate([
+      { $unwind: '$registrations' },
+      { $group: { _id: null, count: { $sum: 1 } } }
+    ]);
+
+    res.json({
+      totalEvents,
+      upcomingEvents,
+      pastEvents,
+      totalRegistrations: totalRegistrations[0]?.count || 0
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
     res.status(500).json({ message: error.message });
   }
 });
