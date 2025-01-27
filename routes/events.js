@@ -9,12 +9,11 @@ const { sendEventConfirmation } = require('../utils/email');
 router.get('/', async (req, res) => {
   try {
     const events = await Event.find()
-      .sort({ date: 1 })
-      .select('-registrations');
+      .sort({ date: -1 });
     res.json(events);
   } catch (error) {
     console.error('Error fetching events:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching events' });
   }
 });
 
@@ -97,80 +96,68 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
 // Get user registrations
 router.get('/user-registrations', protect, async (req, res) => {
   try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
+    const events = await Event.find({
+      'registrations.userId': req.user._id
+    }).select('title date registrations.$');
+    
+    const registrations = events.map(event => ({
+      eventId: event._id,
+      title: event.title,
+      date: event.date,
+      registration: event.registrations[0]
+    }));
 
-    const userId = req.user._id;
-    const events = await Event.find({ 'registrations.userId': userId })
-      .select('_id title date registrations')
-      .lean();
-    
-    const registrations = events.map(event => {
-      const registration = event.registrations.find(reg => 
-        reg.userId.toString() === userId.toString()
-      );
-      
-      return {
-        eventId: event._id,
-        userId: userId,
-        eventTitle: event.title,
-        date: event.date,
-        registrationDate: registration?.registrationDate
-      };
-    });
-    
     res.json(registrations);
   } catch (error) {
     console.error('Error fetching user registrations:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching user registrations' });
   }
 });
 
 // Register for an event
-router.post('/register', protect, async (req, res) => {
+router.post('/:id/register', protect, async (req, res) => {
   try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-
-    const { eventId, name, email, registration_no, mobile_no, semester } = req.body;
-    const userId = req.user._id;
-
-    // Validate required fields
-    if (!eventId || !name || !email) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    const event = await Event.findById(eventId);
+    const event = await Event.findById(req.params.id);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
     // Check if user is already registered
-    const isRegistered = event.registrations.some(reg => 
-      reg.userId.toString() === userId.toString()
-    );
-    if (isRegistered) {
+    if (event.registrations.some(reg => reg.userId.toString() === req.user._id.toString())) {
       return res.status(400).json({ message: 'Already registered for this event' });
     }
 
-    // Add registration
     event.registrations.push({
-      userId,
-      name,
-      email,
-      registration_no,
-      mobile_no,
-      semester,
-      registrationDate: new Date()
+      userId: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      registration_no: req.user.registration_no,
+      mobile_no: req.user.mobile_no,
+      semester: req.user.semester
     });
 
     await event.save();
-    res.json({ success: true, message: 'Successfully registered for the event' });
+    res.json(event);
   } catch (error) {
     console.error('Error registering for event:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error registering for event' });
+  }
+});
+
+// Get event registrations (admin only)
+router.get('/:id/registrations', protect, authorize('admin', 'superadmin'), async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id)
+      .populate('registrations.userId', 'name email registration_no');
+    
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    res.json(event.registrations);
+  } catch (error) {
+    console.error('Error fetching event registrations:', error);
+    res.status(500).json({ message: 'Error fetching event registrations' });
   }
 });
 
