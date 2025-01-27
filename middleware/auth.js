@@ -10,21 +10,28 @@ exports.protect = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({ message: 'Not authorized to access this route' });
+      return res.status(401).json({ message: 'Not authenticated - No token provided' });
     }
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select('-password');
+      
+      const user = await User.findById(decoded.id)
+        .select('-password')
+        .lean();
       
       if (!user) {
         return res.status(401).json({ message: 'User not found' });
       }
 
+      // Add isAdmin flag based on role
+      user.isAdmin = user.role === 'admin' || user.role === 'superadmin';
+      
       req.user = user;
       next();
     } catch (err) {
-      return res.status(401).json({ message: 'Token is invalid or expired' });
+      console.error('Token verification error:', err);
+      return res.status(401).json({ message: 'Invalid or expired token' });
     }
   } catch (error) {
     console.error('Auth middleware error:', error);
@@ -35,7 +42,7 @@ exports.protect = async (req, res, next) => {
 exports.authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({ message: 'User not authenticated' });
+      return res.status(401).json({ message: 'Not authenticated' });
     }
     
     if (!roles.includes(req.user.role)) {

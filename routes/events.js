@@ -34,10 +34,18 @@ router.get('/:id', protect, async (req, res) => {
 // Get admin events
 router.get('/admin/events', protect, async (req, res) => {
   try {
-    if (!req.user || !req.user.isAdmin) {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    if (!req.user.isAdmin && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Not authorized' });
     }
-    const events = await Event.find().sort({ date: 1 });
+
+    const events = await Event.find()
+      .sort({ date: -1 })
+      .lean();
+
     res.json(events);
   } catch (error) {
     console.error('Error fetching admin events:', error);
@@ -90,13 +98,13 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
 router.get('/user-registrations', protect, async (req, res) => {
   try {
     if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: 'User not authenticated' });
+      return res.status(401).json({ message: 'Not authenticated' });
     }
 
     const userId = req.user._id;
-    const events = await Event.find()
-      .where('registrations.userId').equals(userId)
-      .select('_id title date registrations.$');
+    const events = await Event.find({ 'registrations.userId': userId })
+      .select('_id title date registrations')
+      .lean();
     
     const registrations = events.map(event => {
       const registration = event.registrations.find(reg => 
@@ -169,7 +177,11 @@ router.post('/register', protect, async (req, res) => {
 // Get dashboard stats
 router.get('/dashboard/stats', protect, async (req, res) => {
   try {
-    if (!req.user || !req.user.isAdmin) {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    if (!req.user.isAdmin && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -180,8 +192,8 @@ router.get('/dashboard/stats', protect, async (req, res) => {
       Event.countDocuments({ date: { $gt: now } }),
       Event.countDocuments({ date: { $lte: now } }),
       Event.aggregate([
-        { $project: { registrationCount: { $size: { $ifNull: ['$registrations', []] } } } },
-        { $group: { _id: null, total: { $sum: '$registrationCount' } } }
+        { $unwind: { path: '$registrations', preserveNullAndEmptyArrays: true } },
+        { $group: { _id: null, total: { $sum: { $cond: [{ $ifNull: ['$registrations', false] }, 1, 0] } } } }
       ])
     ]);
 
