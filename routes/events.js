@@ -72,14 +72,20 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
 // Get user registrations
 router.get('/user-registrations', protect, async (req, res) => {
   try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
     const userId = req.user._id;
     const events = await Event.find({ 'registrations.userId': userId });
+    
     const registrations = events.map(event => ({
       eventId: event._id,
       userId: userId,
       eventTitle: event.title,
       date: event.date
     }));
+    
     res.json(registrations);
   } catch (error) {
     console.error('Error fetching user registrations:', error);
@@ -90,10 +96,15 @@ router.get('/user-registrations', protect, async (req, res) => {
 // Register for an event
 router.post('/register', protect, async (req, res) => {
   try {
-    const { eventId, userId, name, email, registration_no, mobile_no, semester } = req.body;
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const { eventId, name, email, registration_no, mobile_no, semester } = req.body;
+    const userId = req.user._id;
 
     // Validate required fields
-    if (!eventId || !userId || !name || !email) {
+    if (!eventId || !name || !email) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
@@ -103,7 +114,7 @@ router.post('/register', protect, async (req, res) => {
     }
 
     // Check if user is already registered
-    const isRegistered = event.registrations.some(reg => reg.userId.toString() === userId);
+    const isRegistered = event.registrations.some(reg => reg.userId.toString() === userId.toString());
     if (isRegistered) {
       return res.status(400).json({ message: 'Already registered for this event' });
     }
