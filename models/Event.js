@@ -8,31 +8,20 @@ const registrationSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: true,
-    trim: true
+    required: true
   },
   email: {
     type: String,
-    required: true,
-    trim: true
+    required: true
   },
-  registration_no: {
-    type: String,
-    trim: true
-  },
-  mobile_no: {
-    type: String,
-    trim: true
-  },
-  semester: {
-    type: String,
-    trim: true
-  },
+  registration_no: String,
+  mobile_no: String,
+  semester: String,
   registrationDate: {
     type: Date,
     default: Date.now
   }
-});
+}, { _id: false });
 
 const eventSchema = new mongoose.Schema({
   title: {
@@ -92,7 +81,7 @@ eventSchema.pre('save', function(next) {
 
 // Virtual for checking if event is past
 eventSchema.virtual('isPast').get(function() {
-  return new Date(this.date) <= new Date();
+  return new Date(this.date) < new Date();
 });
 
 // Method to check if a user is registered

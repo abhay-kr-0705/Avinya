@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
 // Get single event
 router.get('/:id', protect, async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findById(req.params.id).lean();
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
