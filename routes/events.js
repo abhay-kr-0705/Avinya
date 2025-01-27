@@ -115,24 +115,24 @@ router.post('/register', protect, async (req, res) => {
 });
 
 // Get admin events
-router.get('/admin/events', protect, async (req, res) => {
+router.get('/admin/events', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
-
-    if (!req.user.isAdmin && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
     const events = await Event.find()
       .sort({ date: -1 })
+      .select('-registrations.password')
       .lean();
 
-    res.json(events);
+    res.json({
+      success: true,
+      data: events
+    });
   } catch (error) {
     console.error('Error fetching admin events:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching events',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

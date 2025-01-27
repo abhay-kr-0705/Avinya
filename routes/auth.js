@@ -199,8 +199,22 @@ router.post('/login', async (req, res) => {
 // Get current user
 router.get('/me', protect, async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Not authenticated'
+      });
+    }
+
     const user = await User.findById(req.user.id).select('-password');
     
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
     // Update admin status if needed
     if (user.email === 'abhayk7481@gmail.com' || user.email === 'genx.gdc@gmail.com') {
       user.isAdmin = true;
@@ -208,10 +222,17 @@ router.get('/me', protect, async (req, res) => {
       await user.save();
     }
     
-    res.json(user);
+    res.json({
+      success: true,
+      data: user
+    });
   } catch (err) {
     console.error('Get current user error:', err);
-    res.status(500).json({ message: 'Error getting user data' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error getting user data',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
