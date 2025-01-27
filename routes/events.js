@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
   try {
     const events = await Event.find()
       .sort({ date: 1 })
-      .select('-registrations.userId -registrations.email -registrations.registration_no -registrations.mobile_no -registrations.semester');
+      .select('-registrations');
     res.json(events);
   } catch (error) {
     console.error('Error fetching events:', error);
@@ -94,16 +94,23 @@ router.get('/user-registrations', protect, async (req, res) => {
     }
 
     const userId = req.user._id;
-    const events = await Event.find({ 'registrations.userId': userId })
+    const events = await Event.find()
+      .where('registrations.userId').equals(userId)
       .select('_id title date registrations.$');
     
-    const registrations = events.map(event => ({
-      eventId: event._id,
-      userId: userId,
-      eventTitle: event.title,
-      date: event.date,
-      registrationDate: event.registrations[0]?.registrationDate
-    }));
+    const registrations = events.map(event => {
+      const registration = event.registrations.find(reg => 
+        reg.userId.toString() === userId.toString()
+      );
+      
+      return {
+        eventId: event._id,
+        userId: userId,
+        eventTitle: event.title,
+        date: event.date,
+        registrationDate: registration?.registrationDate
+      };
+    });
     
     res.json(registrations);
   } catch (error) {
@@ -133,7 +140,9 @@ router.post('/register', protect, async (req, res) => {
     }
 
     // Check if user is already registered
-    const isRegistered = event.registrations.some(reg => reg.userId.toString() === userId.toString());
+    const isRegistered = event.registrations.some(reg => 
+      reg.userId.toString() === userId.toString()
+    );
     if (isRegistered) {
       return res.status(400).json({ message: 'Already registered for this event' });
     }
@@ -165,19 +174,22 @@ router.get('/dashboard/stats', protect, async (req, res) => {
     }
 
     const now = new Date();
-    const totalEvents = await Event.countDocuments();
-    const upcomingEvents = await Event.countDocuments({ date: { $gt: now } });
-    const pastEvents = await Event.countDocuments({ date: { $lte: now } });
-    const totalRegistrations = await Event.aggregate([
-      { $unwind: '$registrations' },
-      { $group: { _id: null, count: { $sum: 1 } } }
+    
+    const [totalEvents, upcomingEvents, pastEvents, registrationsResult] = await Promise.all([
+      Event.countDocuments(),
+      Event.countDocuments({ date: { $gt: now } }),
+      Event.countDocuments({ date: { $lte: now } }),
+      Event.aggregate([
+        { $project: { registrationCount: { $size: { $ifNull: ['$registrations', []] } } } },
+        { $group: { _id: null, total: { $sum: '$registrationCount' } } }
+      ])
     ]);
 
     res.json({
       totalEvents,
       upcomingEvents,
       pastEvents,
-      totalRegistrations: totalRegistrations[0]?.count || 0
+      totalRegistrations: registrationsResult[0]?.total || 0
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
