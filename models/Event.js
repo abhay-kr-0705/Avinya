@@ -1,117 +1,84 @@
 const mongoose = require('mongoose');
 
 const registrationSchema = new mongoose.Schema({
-  userId: {
+  user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  name: {
-    type: String,
-    required: true
-  },
-  email: {
-    type: String,
-    required: true
-  },
-  registration_no: String,
-  mobile_no: String,
-  semester: String,
-  registrationDate: {
+  registered_at: {
     type: Date,
     default: Date.now
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'cancelled'],
+    default: 'pending'
   }
 }, { _id: false });
 
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, 'Please add a title'],
+    trim: true,
+    maxlength: [100, 'Title cannot be more than 100 characters']
   },
   description: {
     type: String,
-    required: true
+    required: [true, 'Please add a description']
   },
   date: {
     type: Date,
-    required: true
+    required: [true, 'Please add a start date']
   },
   end_date: {
-    type: Date
+    type: Date,
+    required: [true, 'Please add an end date']
   },
   venue: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, 'Please add a venue']
   },
   type: {
     type: String,
     enum: ['upcoming', 'past'],
-    required: true
+    required: [true, 'Please specify event type']
   },
-  registrations: [registrationSchema],
-  createdAt: {
+  registrations: {
+    type: [registrationSchema],
+    default: []
+  },
+  created_at: {
     type: Date,
     default: Date.now
   },
-  updatedAt: {
+  updated_at: {
     type: Date,
     default: Date.now
   }
 }, {
   timestamps: {
-    createdAt: 'createdAt',
-    updatedAt: 'updatedAt'
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
   },
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
-// Add indexes for better query performance
-eventSchema.index({ date: 1, type: 1 });
-eventSchema.index({ createdAt: -1 });
-eventSchema.index({ 'registrations.userId': 1 });
-
-// Pre-save middleware to update timestamps
-eventSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  next();
-});
-
-// Virtual for checking if event is past
-eventSchema.virtual('isPast').get(function() {
-  return new Date(this.date) < new Date();
-});
-
-// Method to check if a user is registered
-eventSchema.methods.isUserRegistered = function(userId) {
-  return this.registrations.some(reg => reg.userId.toString() === userId.toString());
-};
-
-// Configure toJSON transform
-eventSchema.set('toJSON', {
-  virtuals: true,
-  transform: function(doc, ret) {
-    ret.id = ret._id;
-    delete ret._id;
-    delete ret.__v;
-    // Remove sensitive registration data when not needed
-    if (ret.registrations) {
-      ret.registrations = ret.registrations.map(reg => ({
-        id: reg._id,
-        userId: reg.userId,
-        name: reg.name,
-        registrationDate: reg.registrationDate
-      }));
-    }
-    return ret;
-  }
-});
-
 // Add virtual for registration count
 eventSchema.virtual('registrationCount').get(function() {
   return this.registrations ? this.registrations.length : 0;
+});
+
+// Add index for better query performance
+eventSchema.index({ date: 1, type: 1 });
+eventSchema.index({ created_at: -1 });
+
+// Update timestamps on save
+eventSchema.pre('save', function(next) {
+  this.updated_at = Date.now();
+  next();
 });
 
 module.exports = mongoose.model('Event', eventSchema);

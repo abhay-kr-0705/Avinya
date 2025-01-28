@@ -1,95 +1,113 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Please provide a name'],
+    required: [true, 'Name is required'],
     trim: true,
+    minlength: [2, 'Name must be at least 2 characters long'],
     maxlength: [50, 'Name cannot be more than 50 characters']
   },
   email: {
     type: String,
-    required: [true, 'Please provide an email'],
+    required: [true, 'Email is required'],
     unique: true,
     trim: true,
+    lowercase: true,
     match: [
-      /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
-      'Please provide a valid email'
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      'Please enter a valid email address'
     ]
   },
   password: {
     type: String,
-    required: [true, 'Please provide a password'],
-    minlength: [6, 'Password must be at least 6 characters'],
+    required: [true, 'Password is required'],
+    minlength: [6, 'Password must be at least 6 characters long'],
     select: false
-  },
-  role: {
-    type: String,
-    enum: ['user', 'admin', 'superadmin'],
-    default: 'user'
   },
   registration_no: {
     type: String,
-    trim: true
+    required: [true, 'Registration number is required'],
+    unique: true,
+    trim: true,
+    uppercase: true
   },
-  mobile_no: {
+  branch: {
     type: String,
+    required: [true, 'Branch is required'],
     trim: true
   },
   semester: {
     type: String,
+    required: [true, 'Semester is required'],
     trim: true
   },
-  resetPasswordToken: String,
-  resetPasswordExpire: Date,
-  createdAt: {
+  mobile: {
+    type: String,
+    required: [true, 'Mobile number is required'],
+    trim: true,
+    validate: {
+      validator: function(v) {
+        // Remove any non-digit characters (including +)
+        const digits = v.replace(/\D/g, '');
+        // Check if the remaining digits form a valid mobile number
+        // For Indian numbers: either 10 digits, or 11-12 digits starting with country code
+        return /^(\d{10}|\d{11,12})$/.test(digits);
+      },
+      message: 'Please enter a valid mobile number'
+    }
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
+  role: {
+    type: String,
+    enum: {
+      values: ['user', 'admin', 'superadmin'],
+      message: '{VALUE} is not a valid role'
+    },
+    default: 'user'
+  },
+  created_at: {
+    type: Date,
+    default: Date.now
+  },
+  updated_at: {
     type: Date,
     default: Date.now
   }
 });
 
-// Encrypt password using bcrypt
+// Update the updated_at timestamp before saving
+userSchema.pre('save', function(next) {
+  this.updated_at = new Date();
+  next();
+});
+
+// Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
+    return next();
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
     next();
+  } catch (err) {
+    next(err);
   }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Sign JWT and return
-userSchema.methods.getSignedJwtToken = function() {
-  return jwt.sign(
-    { id: this._id, role: this.role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE }
-  );
-};
-
-// Match user entered password to hashed password in database
+// Method to compare password
 userSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
-};
-
-// Virtual for checking if user is admin
-userSchema.virtual('isAdmin').get(function() {
-  return this.role === 'admin' || this.role === 'superadmin';
-});
-
-// Configure toJSON transform
-userSchema.set('toJSON', {
-  virtuals: true,
-  transform: function(doc, ret) {
-    ret.id = ret._id;
-    delete ret._id;
-    delete ret.__v;
-    delete ret.password;
-    delete ret.resetPasswordToken;
-    delete ret.resetPasswordExpire;
-    return ret;
+  try {
+    return await bcrypt.compare(enteredPassword, this.password);
+  } catch (err) {
+    throw new Error('Error comparing passwords');
   }
-});
+};
 
 module.exports = mongoose.model('User', userSchema);
