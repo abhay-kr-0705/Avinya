@@ -1,84 +1,65 @@
 const mongoose = require('mongoose');
 
-const registrationSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  registered_at: {
-    type: Date,
-    default: Date.now
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'confirmed', 'cancelled'],
-    default: 'pending'
-  }
-}, { _id: false });
-
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Please add a title'],
-    trim: true,
-    maxlength: [100, 'Title cannot be more than 100 characters']
+    required: true,
+    trim: true
   },
   description: {
     type: String,
-    required: [true, 'Please add a description']
+    required: true
   },
   date: {
     type: Date,
-    required: [true, 'Please add a start date']
+    required: true
   },
   end_date: {
     type: Date,
-    required: [true, 'Please add an end date']
+    required: true
   },
   venue: {
     type: String,
-    required: [true, 'Please add a venue']
+    required: true
   },
   type: {
     type: String,
     enum: ['upcoming', 'past'],
-    required: [true, 'Please specify event type']
+    required: true
   },
-  registrations: {
-    type: [registrationSchema],
-    default: []
+  image: {
+    type: String,
+    default: ''
   },
-  created_at: {
-    type: Date,
-    default: Date.now
+  registration_link: {
+    type: String
   },
-  updated_at: {
-    type: Date,
-    default: Date.now
+  coordinators: [{
+    type: String
+  }],
+  details: [{
+    type: String
+  }],
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   }
 }, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
-  },
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  timestamps: true
 });
 
-// Add virtual for registration count
-eventSchema.virtual('registrationCount').get(function() {
-  return this.registrations ? this.registrations.length : 0;
-});
+// Add a method to check if an event is upcoming
+eventSchema.methods.isUpcoming = function() {
+  return new Date(this.date) > new Date();
+};
 
-// Add index for better query performance
-eventSchema.index({ date: 1, type: 1 });
-eventSchema.index({ created_at: -1 });
-
-// Update timestamps on save
+// Automatically update type based on date
 eventSchema.pre('save', function(next) {
-  this.updated_at = Date.now();
+  this.type = this.isUpcoming() ? 'upcoming' : 'past';
   next();
 });
 
-module.exports = mongoose.model('Event', eventSchema);
+const Event = mongoose.model('Event', eventSchema);
+
+module.exports = Event;
