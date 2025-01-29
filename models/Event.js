@@ -1,5 +1,37 @@
 const mongoose = require('mongoose');
 
+const registrationSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true
+  },
+  email: {
+    type: String,
+    required: true
+  },
+  registration_no: {
+    type: String,
+    required: true
+  },
+  mobile_no: {
+    type: String,
+    required: true
+  },
+  semester: {
+    type: String,
+    required: true
+  },
+  registered_at: {
+    type: Date,
+    default: Date.now
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'cancelled'],
+    default: 'pending'
+  }
+});
+
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -40,6 +72,7 @@ const eventSchema = new mongoose.Schema({
   details: [{
     type: String
   }],
+  registrations: [registrationSchema],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
