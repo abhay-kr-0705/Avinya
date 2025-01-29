@@ -39,11 +39,11 @@ app.get('/api/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api/resources', resourceRoutes);
-app.use('/api/gallery', galleryRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/events', require('./routes/events'));
+app.use('/api/resources', require('./routes/resources'));
+app.use('/api/gallery', require('./routes/gallery'));
+app.use('/api/admin', require('./routes/admin'));
 
 // 404 handler
 app.use((req, res) => {

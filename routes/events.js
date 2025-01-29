@@ -96,42 +96,4 @@ router.delete('/:id', protect, isAdmin, async (req, res) => {
   }
 });
 
-// Register for event
-router.post('/:id/register', async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    // Check if event is in the past
-    if (new Date(event.date) < new Date()) {
-      return res.status(400).json({ message: 'Cannot register for past events' });
-    }
-
-    // Add registration to event
-    const registration = {
-      name: req.body.name,
-      email: req.body.email,
-      registration_no: req.body.registration_no,
-      mobile_no: req.body.mobile_no,
-      semester: req.body.semester,
-      registered_at: new Date(),
-      status: 'confirmed'
-    };
-
-    event.registrations = event.registrations || [];
-    event.registrations.push(registration);
-    await event.save();
-
-    res.status(201).json({
-      message: 'Registration successful',
-      registration
-    });
-  } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
 module.exports = router;
