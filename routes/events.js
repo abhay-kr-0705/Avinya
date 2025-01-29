@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Event = require('../models/Event');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
 
 // Get all events
@@ -52,11 +52,11 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create event (Admin only)
-router.post('/', auth, isAdmin, async (req, res) => {
+router.post('/', protect, isAdmin, async (req, res) => {
   try {
     const event = new Event({
       ...req.body,
-      createdBy: req.user.id
+      createdBy: req.user._id
     });
     const newEvent = await event.save();
     res.status(201).json(newEvent);
@@ -66,7 +66,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
 });
 
 // Update event (Admin only)
-router.put('/:id', auth, isAdmin, async (req, res) => {
+router.put('/:id', protect, isAdmin, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
     if (!event) {
@@ -82,14 +82,14 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
 });
 
 // Delete event (Admin only)
-router.delete('/:id', auth, isAdmin, async (req, res) => {
+router.delete('/:id', protect, isAdmin, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    await event.remove();
+    await event.deleteOne();
     res.json({ message: 'Event deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
