@@ -5,7 +5,7 @@ const EventRegistration = require('../models/EventRegistration');
 const { protect, authorize } = require('../middleware/auth');
 const { sendEventConfirmation } = require('../utils/email');
 
-// Get user's registrations - IMPORTANT: This must come before /:id routes
+// Get user's registrations - IMPORTANT: This must come before other routes
 router.get('/registrations', async (req, res) => {
   try {
     const { email } = req.query;
@@ -30,6 +30,29 @@ router.get('/registrations', async (req, res) => {
   } catch (err) {
     console.error('Error fetching registrations:', err);
     res.status(500).json({ message: 'Error fetching registrations' });
+  }
+});
+
+// Get all event registrations for an event (admin only) - IMPORTANT: This must come before /:id routes
+router.get('/:eventId/registrations', protect, authorize('admin', 'superadmin'), async (req, res) => {
+  try {
+    const eventId = req.params.eventId;
+    
+    // First check if event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Get all registrations for this event
+    const registrations = await EventRegistration.find({ event: eventId })
+      .select('name email registration_no mobile_no semester status created_at')
+      .sort({ created_at: -1 });
+
+    res.json(registrations);
+  } catch (error) {
+    console.error('Error fetching event registrations:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
