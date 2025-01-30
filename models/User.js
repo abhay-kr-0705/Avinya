@@ -4,58 +4,54 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Name is required'],
+    required: [true, 'Please provide your name'],
     trim: true,
     minlength: [2, 'Name must be at least 2 characters long'],
     maxlength: [50, 'Name cannot be more than 50 characters']
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: [true, 'Please provide your email'],
     unique: true,
     trim: true,
     lowercase: true,
-    match: [
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-      'Please enter a valid email address'
-    ]
+    match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please provide a valid email']
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: [true, 'Please provide a password'],
     minlength: [6, 'Password must be at least 6 characters long'],
     select: false
   },
   registration_no: {
     type: String,
-    required: [true, 'Registration number is required'],
+    required: [true, 'Please provide your registration number'],
     unique: true,
     trim: true,
     uppercase: true
   },
   branch: {
     type: String,
-    required: [true, 'Branch is required'],
-    trim: true
+    required: [true, 'Please provide your branch'],
+    trim: true,
+    enum: ['CSE', 'EEE', 'ECE (VLSI)', 'Mechanical', 'Civil', 'Mining']
   },
   semester: {
     type: String,
-    required: [true, 'Semester is required'],
-    trim: true
+    required: [true, 'Please provide your semester'],
+    trim: true,
+    enum: ['1', '2', '3', '4', '5', '6', '7', '8']
   },
   mobile: {
     type: String,
-    required: [true, 'Mobile number is required'],
+    required: [true, 'Please provide your mobile number'],
     trim: true,
     validate: {
       validator: function(v) {
-        // Remove any non-digit characters (including +)
-        const digits = v.replace(/\D/g, '');
-        // Check if the remaining digits form a valid mobile number
-        // For Indian numbers: either 10 digits, or 11-12 digits starting with country code
-        return /^(\d{10}|\d{11,12})$/.test(digits);
+        // Allow country code (+91, +1, +44, etc.) followed by 10 digits
+        return /^\+\d{1,4}\d{10}$/.test(v);
       },
-      message: 'Please enter a valid mobile number'
+      message: props => `${props.value} is not a valid mobile number! Format should be +[country code][10 digits]`
     }
   },
   isAdmin: {
@@ -64,10 +60,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: {
-      values: ['user', 'admin', 'superadmin'],
-      message: '{VALUE} is not a valid role'
-    },
+    enum: ['user', 'admin', 'superadmin'],
     default: 'user'
   },
   created_at: {
