@@ -227,4 +227,61 @@ router.post('/logout', (req, res) => {
   }
 });
 
+// Update user profile
+router.put('/users/profile', protect, async (req, res) => {
+  try {
+    const { name, registration_no, branch, semester, mobile } = req.body;
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if registration number is being changed and if it's already taken
+    if (registration_no && registration_no !== user.registration_no) {
+      const existingUser = await User.findOne({ registration_no });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Registration number is already taken'
+        });
+      }
+    }
+
+    // Update user fields if provided
+    if (name) user.name = name;
+    if (registration_no) user.registration_no = registration_no;
+    if (branch) user.branch = branch;
+    if (semester) user.semester = semester;
+    if (mobile) user.mobile = mobile;
+
+    // Save the updated user
+    await user.save();
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        registration_no: user.registration_no,
+        branch: user.branch,
+        semester: user.semester,
+        mobile: user.mobile,
+        isAdmin: user.isAdmin,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating profile'
+    });
+  }
+});
+
 module.exports = router;
