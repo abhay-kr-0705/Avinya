@@ -228,6 +228,55 @@ router.post('/logout', (req, res) => {
 });
 
 // Update user profile
+router.put('/profile', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const { name, registration_no, branch, semester, mobile } = req.body;
+
+    // Update fields if provided
+    if (name) user.name = name;
+    if (registration_no) user.registration_no = registration_no;
+    if (branch) user.branch = branch;
+    if (semester) user.semester = semester;
+    if (mobile) user.mobile = mobile;
+
+    // Don't allow role updates through this endpoint
+    delete req.body.role;
+    delete req.body.isAdmin;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        registration_no: user.registration_no,
+        branch: user.branch,
+        semester: user.semester,
+        mobile: user.mobile,
+        isAdmin: user.isAdmin,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating profile'
+    });
+  }
+});
+
+// Update user profile
 router.put('/users/profile', protect, async (req, res) => {
   try {
     const { name, registration_no, branch, semester, mobile } = req.body;
