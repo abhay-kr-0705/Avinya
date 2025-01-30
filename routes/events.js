@@ -5,13 +5,42 @@ const EventRegistration = require('../models/EventRegistration');
 const { protect, authorize } = require('../middleware/auth');
 const { sendEventConfirmation } = require('../utils/email');
 
+// Get user's registrations - IMPORTANT: This must come before /:id routes
+router.get('/registrations', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const registrations = await EventRegistration.find({ email })
+      .populate('event')
+      .lean();
+
+    const registrationData = registrations
+      .filter(reg => reg.event) // Filter out any registrations where event is null
+      .map(reg => ({
+        event: reg.event._id,
+        email: reg.email,
+        status: reg.status,
+        created_at: reg.created_at
+      }));
+
+    res.json(registrationData);
+  } catch (err) {
+    console.error('Error fetching registrations:', err);
+    res.status(500).json({ message: 'Error fetching registrations' });
+  }
+});
+
 // Get all events (public access)
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find().sort({ start_date: 1 });
+    const events = await Event.find().sort({ date: 1 });
     res.json(events);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error fetching events:', err);
+    res.status(500).json({ message: 'Error fetching events' });
   }
 });
 
@@ -24,48 +53,8 @@ router.get('/:id', protect, async (req, res) => {
     }
     res.json(event);
   } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Create event (Admin only)
-router.post('/', protect, authorize('admin', 'superadmin'), async (req, res) => {
-  try {
-    const event = await Event.create(req.body);
-    res.status(201).json(event);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Update event (Admin only)
-router.put('/:id', protect, authorize('admin', 'superadmin'), async (req, res) => {
-  try {
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-    res.json(event);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Delete event (Admin only)
-router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res) => {
-  try {
-    const event = await Event.findByIdAndDelete(req.params.id);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-    // Delete all registrations for this event
-    await EventRegistration.deleteMany({ event: req.params.id });
-    res.json({ message: 'Event deleted' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error fetching event:', err);
+    res.status(500).json({ message: 'Error fetching event' });
   }
 });
 
@@ -75,6 +64,15 @@ router.post('/:id/register', async (req, res) => {
     const event = await Event.findById(req.params.id);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Validate required fields
+    const requiredFields = ['name', 'email', 'registration_no', 'mobile_no', 'semester'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        message: `Missing required fields: ${missingFields.join(', ')}`
+      });
     }
 
     // Check if already registered with the same email
@@ -93,26 +91,72 @@ router.post('/:id/register', async (req, res) => {
       email: req.body.email,
       registration_no: req.body.registration_no,
       mobile_no: req.body.mobile_no,
+      semester: req.body.semester,
       status: 'registered'
     });
 
     // Send confirmation email
-    await sendEventConfirmation(req.body.email, event, registration);
+    try {
+      await sendEventConfirmation(req.body.email, event, registration);
+    } catch (emailError) {
+      console.error('Error sending confirmation email:', emailError);
+      // Don't fail the registration if email fails
+    }
 
-    res.status(201).json(registration);
+    res.status(201).json({
+      message: 'Successfully registered for the event',
+      registration
+    });
   } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ message: err.message });
+    console.error('Error registering for event:', err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ message: err.message });
+    }
+    res.status(500).json({ message: 'Error registering for event' });
   }
 });
 
-// Get user registrations
-router.get('/registrations', async (req, res) => {
+// Create event (Admin only)
+router.post('/', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
-    const registrations = await EventRegistration.find({ email: req.query.email });
-    res.json(registrations);
+    const event = await Event.create(req.body);
+    res.status(201).json(event);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Error creating event:', err);
+    res.status(500).json({ message: 'Error creating event' });
+  }
+});
+
+// Update event (Admin only)
+router.put('/:id', protect, authorize('admin', 'superadmin'), async (req, res) => {
+  try {
+    const event = await Event.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    res.json(event);
+  } catch (err) {
+    console.error('Error updating event:', err);
+    res.status(500).json({ message: 'Error updating event' });
+  }
+});
+
+// Delete event (Admin only)
+router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res) => {
+  try {
+    const event = await Event.findByIdAndDelete(req.params.id);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    // Delete all registrations for this event
+    await EventRegistration.deleteMany({ event: req.params.id });
+    res.json({ message: 'Event deleted' });
+  } catch (err) {
+    console.error('Error deleting event:', err);
+    res.status(500).json({ message: 'Error deleting event' });
   }
 });
 

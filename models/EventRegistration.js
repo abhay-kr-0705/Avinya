@@ -24,6 +24,10 @@ const eventRegistrationSchema = new mongoose.Schema({
     required: [true, 'Please provide your mobile number'],
     match: [/^[0-9]{10}$/, 'Please provide a valid 10-digit mobile number']
   },
+  semester: {
+    type: String,
+    required: [true, 'Please provide your semester']
+  },
   status: {
     type: String,
     enum: ['registered', 'attended', 'cancelled'],
