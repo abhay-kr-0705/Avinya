@@ -58,16 +58,19 @@ router.post('/', protect, async (req, res) => {
 });
 
 // Upload image
-router.post('/upload', protect, upload.single('image'), async (req, res) => {
+router.post('/upload', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.files || !req.files.image) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const result = await uploadToCloudinary(req.file);
+    const file = req.files.image;
+    const result = await uploadToCloudinary(file.tempFilePath);
+
     res.json({ url: result.secure_url });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error uploading image:', error);
+    res.status(500).json({ message: 'Error uploading image' });
   }
 });
 
