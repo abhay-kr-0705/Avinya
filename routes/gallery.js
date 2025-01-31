@@ -1,22 +1,31 @@
 const express = require('express');
 const router = express.Router();
-const Gallery = require('../models/gallery');
+const Gallery = require('../models/Gallery');
+const { protect } = require('../middleware/auth');
+const multer = require('multer');
 const { uploadToCloudinary } = require('../utils/cloudinary');
-const auth = require('../middleware/auth');
+
+// Configure multer for file upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
 // Get all galleries
-router.get('/galleries', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const galleries = await Gallery.find().sort({ createdAt: -1 });
+    const galleries = await Gallery.find()
+      .sort({ created_at: -1 });
     res.json(galleries);
   } catch (error) {
-    console.error('Error fetching galleries:', error);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ message: error.message });
   }
 });
 
 // Get single gallery
-router.get('/galleries/:id', async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
     if (!gallery) {
@@ -24,57 +33,46 @@ router.get('/galleries/:id', async (req, res) => {
     }
     res.json(gallery);
   } catch (error) {
-    console.error('Error fetching gallery:', error);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ message: error.message });
   }
 });
 
 // Create gallery
-router.post('/galleries', auth, async (req, res) => {
+router.post('/', protect, async (req, res) => {
   try {
-    const { title, description, thumbnail, photos } = req.body;
+    const { title, description, thumbnail, photos, created_by } = req.body;
     
     const gallery = new Gallery({
       title,
       description,
       thumbnail,
       photos,
-      created_by: req.user._id
+      created_by
     });
 
-    await gallery.save();
-    res.status(201).json(gallery);
+    const savedGallery = await gallery.save();
+    res.status(201).json(savedGallery);
   } catch (error) {
-    console.error('Error creating gallery:', error);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(400).json({ message: error.message });
   }
 });
 
-// Update gallery
-router.put('/galleries/:id', auth, async (req, res) => {
+// Upload image
+router.post('/upload', protect, upload.single('image'), async (req, res) => {
   try {
-    const { title, description, thumbnail, photos } = req.body;
-    
-    const gallery = await Gallery.findById(req.params.id);
-    if (!gallery) {
-      return res.status(404).json({ message: 'Gallery not found' });
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    gallery.title = title;
-    gallery.description = description;
-    gallery.thumbnail = thumbnail;
-    gallery.photos = photos;
-
-    await gallery.save();
-    res.json(gallery);
+    const result = await uploadToCloudinary(req.file);
+    res.json({ url: result.secure_url });
   } catch (error) {
-    console.error('Error updating gallery:', error);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ message: error.message });
   }
 });
 
 // Delete gallery
-router.delete('/galleries/:id', auth, async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
     if (!gallery) {
@@ -84,8 +82,7 @@ router.delete('/galleries/:id', auth, async (req, res) => {
     await gallery.remove();
     res.json({ message: 'Gallery deleted successfully' });
   } catch (error) {
-    console.error('Error deleting gallery:', error);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ message: error.message });
   }
 });
 
