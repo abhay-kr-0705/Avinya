@@ -75,17 +75,19 @@ router.post('/upload', protect, authorize('admin', 'superadmin'), async (req, re
 });
 
 // Delete gallery
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
+    
     if (!gallery) {
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    await gallery.remove();
+    await Gallery.findByIdAndDelete(req.params.id);
     res.json({ message: 'Gallery deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error deleting gallery:', error);
+    res.status(500).json({ message: 'Error deleting gallery' });
   }
 });
 
