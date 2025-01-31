@@ -22,6 +22,10 @@ const gallerySchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  thumbnail: {
+    type: String,
+    required: true
+  },
   description: String,
   photos: [photoSchema],
   created_by: {
