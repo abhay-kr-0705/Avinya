@@ -1,21 +1,25 @@
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 
-// Configure Cloudinary with environment variables
+// Configure Cloudinary with hardcoded values
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: 'dpomxgqom',
+  api_key: '536535896991842',
+  api_secret: '6yPrf7oRU5b5kGWaf4uj-n-12zY'
 });
 
 const uploadToCloudinary = async (file) => {
   try {
-    console.log('Uploading to Cloudinary:', file);
-    const result = await cloudinary.uploader.upload(file, {
-      folder: 'genx',
-      resource_type: 'auto'
+    // Convert buffer to base64
+    const b64 = Buffer.from(file.buffer).toString('base64');
+    const dataURI = 'data:' + file.mimetype + ';base64,' + b64;
+    
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(dataURI, {
+      resource_type: 'auto',
+      folder: 'genx_gallery'
     });
-    console.log('Cloudinary upload result:', result);
+    
     return result;
   } catch (error) {
     console.error('Cloudinary upload error:', error);

@@ -2,14 +2,16 @@ const express = require('express');
 const router = express.Router();
 const Gallery = require('../models/Gallery');
 const { protect, authorize } = require('../middleware/auth');
-const fileUpload = require('express-fileupload');
+const multer = require('multer');
 const { uploadToCloudinary } = require('../utils/cloudinary');
 
-// Use fileUpload middleware
-router.use(fileUpload({
-  useTempFiles: true,
-  tempFileDir: '/tmp/'
-}));
+// Configure multer for file upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
 // Get all galleries
 router.get('/', async (req, res) => {
@@ -58,57 +60,32 @@ router.post('/', protect, async (req, res) => {
 // Upload image
 router.post('/upload', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
-    console.log('Upload request received');
-    console.log('Files:', req.files);
-    
     if (!req.files || !req.files.image) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
     const file = req.files.image;
-    
-    // Validate file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      return res.status(400).json({ message: 'File size too large. Maximum size is 10MB' });
-    }
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return res.status(400).json({ message: 'Invalid file type. Only JPEG, PNG, and WebP images are allowed' });
-    }
-
-    console.log('Uploading file:', {
-      name: file.name,
-      size: file.size,
-      mimetype: file.mimetype,
-      tempFilePath: file.tempFilePath
-    });
-
     const result = await uploadToCloudinary(file.tempFilePath);
-    
-    console.log('Upload successful:', result.secure_url);
+
     res.json({ url: result.secure_url });
   } catch (error) {
-    console.error('Error in upload route:', error);
-    res.status(500).json({ message: 'Error uploading image', error: error.message });
+    console.error('Error uploading image:', error);
+    res.status(500).json({ message: 'Error uploading image' });
   }
 });
 
 // Delete gallery
-router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
-    
     if (!gallery) {
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    await Gallery.findByIdAndDelete(req.params.id);
+    await gallery.remove();
     res.json({ message: 'Gallery deleted successfully' });
   } catch (error) {
-    console.error('Error deleting gallery:', error);
-    res.status(500).json({ message: 'Error deleting gallery' });
+    res.status(500).json({ message: error.message });
   }
 });
 

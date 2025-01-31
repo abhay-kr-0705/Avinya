@@ -2,7 +2,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const fileUpload = require('express-fileupload');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -29,14 +28,6 @@ app.use(cors(corsOptions));
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// File upload middleware
-app.use(fileUpload({
-  useTempFiles: true,
-  tempFileDir: '/tmp/',
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  abortOnLimit: true
-}));
 
 // Health check endpoint (before routes)
 app.get('/api/health', (req, res) => {
