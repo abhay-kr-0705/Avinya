@@ -2,16 +2,14 @@ const express = require('express');
 const router = express.Router();
 const Gallery = require('../models/Gallery');
 const { protect, authorize } = require('../middleware/auth');
-const multer = require('multer');
+const fileUpload = require('express-fileupload');
 const { uploadToCloudinary } = require('../utils/cloudinary');
 
-// Configure multer for file upload
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
-});
+// Use fileUpload middleware
+router.use(fileUpload({
+  useTempFiles: true,
+  tempFileDir: '/tmp/'
+}));
 
 // Get all galleries
 router.get('/', async (req, res) => {
@@ -61,11 +59,15 @@ router.post('/', protect, async (req, res) => {
 router.post('/upload', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
     if (!req.files || !req.files.image) {
+      console.log('Files received:', req.files);
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
     const file = req.files.image;
+    console.log('Uploading file:', file.name);
+
     const result = await uploadToCloudinary(file.tempFilePath);
+    console.log('Cloudinary result:', result);
 
     res.json({ url: result.secure_url });
   } catch (error) {
