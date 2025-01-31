@@ -3,31 +3,37 @@ const mongoose = require('mongoose');
 const resourceSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
-  description: {
+  type: {
     type: String,
-    required: true
+    required: true,
+    enum: ['pdf', 'video', 'link', 'image', 'document']
+  },
+  domain: {
+    type: String,
+    required: true,
+    enum: ['programming', 'design', 'business', 'marketing', 'other']
   },
   url: {
     type: String,
     required: true
   },
-  type: {
+  description: {
     type: String,
-    required: true,
-    enum: ['document', 'video', 'link']
+    trim: true
   },
-  uploaded_by: {
+  created_by: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   }
 }, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
-  }
+  timestamps: true
 });
+
+// Add text index for search functionality
+resourceSchema.index({ title: 'text', description: 'text' });
 
 module.exports = mongoose.model('Resource', resourceSchema);

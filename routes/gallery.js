@@ -71,6 +71,29 @@ router.post('/upload', protect, upload.single('image'), async (req, res) => {
   }
 });
 
+// Update gallery
+router.put('/:id', protect, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, thumbnail, photos } = req.body;
+    
+    const gallery = await Gallery.findById(id);
+    if (!gallery) {
+      return res.status(404).json({ message: 'Gallery not found' });
+    }
+
+    gallery.title = title;
+    gallery.description = description;
+    if (thumbnail) gallery.thumbnail = thumbnail;
+    if (photos) gallery.photos = photos;
+
+    await gallery.save();
+    res.json(gallery);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Delete gallery
 router.delete('/:id', protect, async (req, res) => {
   try {

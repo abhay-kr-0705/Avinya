@@ -1,69 +1,76 @@
 const express = require('express');
 const router = express.Router();
 const Resource = require('../models/Resource');
-const { protect } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 
 // Get all resources
 router.get('/', async (req, res) => {
   try {
-    const resources = await Resource.find().sort({ created_at: -1 });
+    const resources = await Resource.find().sort({ createdAt: -1 });
     res.json(resources);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching resources:', error);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
-// Create a new resource
-router.post('/', protect, async (req, res) => {
-  const resource = new Resource({
-    ...req.body,
-    uploaded_by: req.user.id
-  });
-
+// Create new resource
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const newResource = await resource.save();
-    res.status(201).json(newResource);
+    const { title, type, domain, url, description, created_by } = req.body;
+    const resource = new Resource({
+      title,
+      type,
+      domain,
+      url,
+      description,
+      created_by
+    });
+    await resource.save();
+    res.status(201).json(resource);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error creating resource:', error);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
-// Update a resource
-router.put('/:id', protect, async (req, res) => {
+// Update resource
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const resource = await Resource.findById(req.params.id);
+    const { id } = req.params;
+    const { title, type, domain, url, description } = req.body;
+    
+    const resource = await Resource.findById(id);
     if (!resource) {
       return res.status(404).json({ message: 'Resource not found' });
     }
 
-    if (resource.uploaded_by.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
+    resource.title = title;
+    resource.type = type;
+    resource.domain = domain;
+    resource.url = url;
+    resource.description = description;
 
-    Object.assign(resource, req.body);
-    const updatedResource = await resource.save();
-    res.json(updatedResource);
+    await resource.save();
+    res.json(resource);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error updating resource:', error);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
-// Delete a resource
-router.delete('/:id', protect, async (req, res) => {
+// Delete resource
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const resource = await Resource.findById(req.params.id);
+    const resource = await Resource.findByIdAndDelete(req.params.id);
     if (!resource) {
       return res.status(404).json({ message: 'Resource not found' });
     }
-
-    if (resource.uploaded_by.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
-    await Resource.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Resource deleted' });
+    res.json({ message: 'Resource deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error deleting resource:', error);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
