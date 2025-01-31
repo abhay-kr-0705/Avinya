@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Gallery = require('../models/Gallery');
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 const multer = require('multer');
 const { uploadToCloudinary } = require('../utils/cloudinary');
 
@@ -83,6 +83,28 @@ router.delete('/:id', protect, async (req, res) => {
     res.json({ message: 'Gallery deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a photo from a gallery
+router.delete('/:galleryId/photos/:photoId', protect, authorize('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { galleryId, photoId } = req.params;
+
+    // Find the gallery
+    const gallery = await Gallery.findById(galleryId);
+    if (!gallery) {
+      return res.status(404).json({ message: 'Gallery not found' });
+    }
+
+    // Remove the photo from the gallery's photos array
+    gallery.photos = gallery.photos.filter(photo => photo.id !== photoId);
+    await gallery.save();
+
+    res.json({ message: 'Photo deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting photo:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
