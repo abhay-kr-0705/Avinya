@@ -56,58 +56,14 @@ router.get('/:eventId/registrations', protect, authorize('admin', 'superadmin'),
   }
 });
 
-// Update event types based on date
-const updateEventTypes = async () => {
-  try {
-    const currentDate = new Date();
-    
-    // Find all upcoming events that have ended
-    const events = await Event.find({
-      type: 'upcoming',
-      end_date: { $lt: currentDate.toISOString() }
-    });
-
-    // Update their type to 'past'
-    if (events.length > 0) {
-      console.log(`Moving ${events.length} events to past events`);
-      await Promise.all(events.map(async (event) => {
-        event.type = 'past';
-        await event.save();
-        console.log(`Moved event "${event.title}" to past events`);
-      }));
-    }
-  } catch (error) {
-    console.error('Error updating event types:', error);
-  }
-};
-
-// Run updateEventTypes every hour
-const UPDATE_INTERVAL = 60 * 60 * 1000; // 1 hour
-setInterval(updateEventTypes, UPDATE_INTERVAL);
-
-// Run it once when server starts
-updateEventTypes();
-
-// Get all events
+// Get all events (public access)
 router.get('/', async (req, res) => {
   try {
-    // Update event types before sending response
-    await updateEventTypes();
-    
-    // Get all events sorted by date (newest first for past events, soonest first for upcoming)
-    const events = await Event.aggregate([
-      {
-        $sort: {
-          type: 1, // Sort by type first (upcoming before past)
-          date: { $cond: { if: { $eq: ['$type', 'upcoming'] }, then: 1, else: -1 } } // Different sort order for each type
-        }
-      }
-    ]);
-    
+    const events = await Event.find().sort({ date: 1 });
     res.json(events);
   } catch (err) {
     console.error('Error fetching events:', err);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ message: 'Error fetching events' });
   }
 });
 
