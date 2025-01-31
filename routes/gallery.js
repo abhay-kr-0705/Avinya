@@ -58,21 +58,40 @@ router.post('/', protect, async (req, res) => {
 // Upload image
 router.post('/upload', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
+    console.log('Upload request received');
+    console.log('Files:', req.files);
+    
     if (!req.files || !req.files.image) {
-      console.log('Files received:', req.files);
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
     const file = req.files.image;
-    console.log('Uploading file:', file.name);
+    
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ message: 'File size too large. Maximum size is 10MB' });
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ message: 'Invalid file type. Only JPEG, PNG, and WebP images are allowed' });
+    }
+
+    console.log('Uploading file:', {
+      name: file.name,
+      size: file.size,
+      mimetype: file.mimetype,
+      tempFilePath: file.tempFilePath
+    });
 
     const result = await uploadToCloudinary(file.tempFilePath);
-    console.log('Cloudinary result:', result);
-
+    
+    console.log('Upload successful:', result.secure_url);
     res.json({ url: result.secure_url });
   } catch (error) {
-    console.error('Error uploading image:', error);
-    res.status(500).json({ message: 'Error uploading image' });
+    console.error('Error in upload route:', error);
+    res.status(500).json({ message: 'Error uploading image', error: error.message });
   }
 });
 
