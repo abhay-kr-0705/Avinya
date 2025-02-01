@@ -54,11 +54,16 @@ router.post('/', protect, upload.fields([
 ]), async (req, res) => {
   const uploadedFiles = [];
   try {
+    console.log('Creating new gallery with data:', {
+      body: req.body,
+      files: req.files ? Object.keys(req.files) : 'No files'
+    });
+
     if (!req.body.title) {
       return res.status(400).json({ message: 'Title is required' });
     }
 
-    if (!req.files.thumbnail) {
+    if (!req.files || !req.files.thumbnail || !req.files.thumbnail[0]) {
       return res.status(400).json({ message: 'Thumbnail is required' });
     }
 
@@ -74,8 +79,8 @@ router.post('/', protect, upload.fields([
 
     // Upload photos if any
     let photoResults = [];
-    if (req.files.photos) {
-      console.log('Uploading photos');
+    if (req.files.photos && req.files.photos.length > 0) {
+      console.log('Uploading photos:', req.files.photos.length);
       const photoPromises = req.files.photos.map(async (file) => {
         uploadedFiles.push(file.path);
         const result = await cloudinary.uploader.upload(file.path, {
@@ -89,7 +94,7 @@ router.post('/', protect, upload.fields([
         };
       });
       photoResults = await Promise.all(photoPromises);
-      console.log('Photos uploaded:', photoResults);
+      console.log('Photos uploaded:', photoResults.length);
     }
 
     // Create gallery
@@ -103,13 +108,14 @@ router.post('/', protect, upload.fields([
     });
 
     const savedGallery = await gallery.save();
-    console.log('Gallery created successfully');
+    console.log('Gallery created successfully:', savedGallery._id);
 
     // Clean up uploaded files
     uploadedFiles.forEach(filePath => {
       try {
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
+          console.log('Cleaned up file:', filePath);
         }
       } catch (err) {
         console.error('Error deleting temp file:', err);
@@ -125,6 +131,7 @@ router.post('/', protect, upload.fields([
       try {
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
+          console.log('Cleaned up file on error:', filePath);
         }
       } catch (err) {
         console.error('Error deleting temp file:', err);
@@ -136,6 +143,7 @@ router.post('/', protect, upload.fields([
       error.cloudinaryPublicIds.forEach(async (publicId) => {
         try {
           await cloudinary.uploader.destroy(publicId);
+          console.log('Cleaned up Cloudinary resource:', publicId);
         } catch (err) {
           console.error('Error deleting from Cloudinary:', err);
         }
