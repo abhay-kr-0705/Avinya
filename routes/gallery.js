@@ -47,23 +47,105 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create gallery
-router.post('/', protect, async (req, res) => {
+// Create new gallery
+router.post('/', protect, upload.fields([
+  { name: 'thumbnail', maxCount: 1 },
+  { name: 'photos', maxCount: 50 }
+]), async (req, res) => {
+  const uploadedFiles = [];
   try {
-    const { title, description, thumbnail, photos, created_by } = req.body;
-    
+    if (!req.body.title) {
+      return res.status(400).json({ message: 'Title is required' });
+    }
+
+    if (!req.files.thumbnail) {
+      return res.status(400).json({ message: 'Thumbnail is required' });
+    }
+
+    // Upload thumbnail
+    console.log('Uploading thumbnail');
+    const thumbnailPath = req.files.thumbnail[0].path;
+    uploadedFiles.push(thumbnailPath);
+    const thumbnailResult = await cloudinary.uploader.upload(thumbnailPath, {
+      folder: 'genx_gallery',
+      resource_type: 'auto'
+    });
+    console.log('Thumbnail uploaded:', thumbnailResult);
+
+    // Upload photos if any
+    let photoResults = [];
+    if (req.files.photos) {
+      console.log('Uploading photos');
+      const photoPromises = req.files.photos.map(async (file) => {
+        uploadedFiles.push(file.path);
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: 'genx_gallery',
+          resource_type: 'auto'
+        });
+        return {
+          url: result.secure_url,
+          public_id: result.public_id,
+          order: photoResults.length
+        };
+      });
+      photoResults = await Promise.all(photoPromises);
+      console.log('Photos uploaded:', photoResults);
+    }
+
+    // Create gallery
     const gallery = new Gallery({
-      title,
-      description,
-      thumbnail,
-      photos,
-      created_by
+      title: req.body.title,
+      description: req.body.description || '',
+      thumbnail: thumbnailResult.secure_url,
+      thumbnail_public_id: thumbnailResult.public_id,
+      photos: photoResults,
+      created_by: req.user._id
     });
 
     const savedGallery = await gallery.save();
+    console.log('Gallery created successfully');
+
+    // Clean up uploaded files
+    uploadedFiles.forEach(filePath => {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (err) {
+        console.error('Error deleting temp file:', err);
+      }
+    });
+
     res.status(201).json(savedGallery);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error creating gallery:', error);
+    
+    // Clean up uploaded files on error
+    uploadedFiles.forEach(filePath => {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (err) {
+        console.error('Error deleting temp file:', err);
+      }
+    });
+
+    // Clean up from Cloudinary if needed
+    if (error.cloudinaryPublicIds) {
+      error.cloudinaryPublicIds.forEach(async (publicId) => {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (err) {
+          console.error('Error deleting from Cloudinary:', err);
+        }
+      });
+    }
+
+    res.status(500).json({ 
+      message: error.message,
+      details: error.stack 
+    });
   }
 });
 
