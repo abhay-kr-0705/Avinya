@@ -4,6 +4,7 @@ const Gallery = require('../models/Gallery');
 const { protect } = require('../middleware/auth');
 const multer = require('multer');
 const { uploadToCloudinary } = require('../utils/cloudinary');
+const fs = require('fs');
 
 // Configure multer for file upload
 const upload = multer({
@@ -71,12 +72,105 @@ router.post('/upload', protect, upload.single('image'), async (req, res) => {
   }
 });
 
-// Delete gallery
+// Update gallery photos
+router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
+  try {
+    const gallery = await Gallery.findById(req.params.id);
+    if (!gallery) {
+      return res.status(404).json({ message: 'Gallery not found' });
+    }
+
+    const newPhotos = req.files.map(file => ({
+      url: file.path,
+      filename: file.filename
+    }));
+
+    gallery.photos = [...gallery.photos, ...newPhotos];
+    await gallery.save();
+
+    res.json(gallery);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Remove photo from gallery
+router.delete('/:id/photos/:photoId', protect, async (req, res) => {
+  try {
+    const gallery = await Gallery.findById(req.params.id);
+    if (!gallery) {
+      return res.status(404).json({ message: 'Gallery not found' });
+    }
+
+    const photoIndex = gallery.photos.findIndex(photo => photo._id.toString() === req.params.photoId);
+    if (photoIndex === -1) {
+      return res.status(404).json({ message: 'Photo not found' });
+    }
+
+    // Remove the file from storage
+    const photo = gallery.photos[photoIndex];
+    await fs.unlink(photo.url);
+
+    // Remove from gallery
+    gallery.photos.splice(photoIndex, 1);
+    await gallery.save();
+
+    res.json(gallery);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update gallery thumbnail
+router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, res) => {
+  try {
+    const gallery = await Gallery.findById(req.params.id);
+    if (!gallery) {
+      return res.status(404).json({ message: 'Gallery not found' });
+    }
+
+    // Remove old thumbnail if exists
+    if (gallery.thumbnail) {
+      try {
+        await fs.unlink(gallery.thumbnail);
+      } catch (error) {
+        console.error('Error deleting old thumbnail:', error);
+      }
+    }
+
+    gallery.thumbnail = req.file.path;
+    await gallery.save();
+
+    res.json(gallery);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete gallery with confirmation
 router.delete('/:id', protect, async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
     if (!gallery) {
       return res.status(404).json({ message: 'Gallery not found' });
+    }
+
+    // Delete all photos
+    for (const photo of gallery.photos) {
+      try {
+        await fs.unlink(photo.url);
+      } catch (error) {
+        console.error('Error deleting photo:', error);
+      }
+    }
+
+    // Delete thumbnail
+    if (gallery.thumbnail) {
+      try {
+        await fs.unlink(gallery.thumbnail);
+      } catch (error) {
+        console.error('Error deleting thumbnail:', error);
+      }
     }
 
     await gallery.remove();
