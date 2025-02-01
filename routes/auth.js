@@ -228,7 +228,7 @@ router.post('/logout', (req, res) => {
 });
 
 // Update user profile
-router.put('/profile', protect, async (req, res) => {
+router.put('/update-profile', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     
