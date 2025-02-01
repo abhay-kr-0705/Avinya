@@ -81,16 +81,41 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    const newPhotos = req.files.map(file => ({
-      url: file.path,
-      filename: file.filename
-    }));
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No photos uploaded' });
+    }
 
-    gallery.photos = [...gallery.photos, ...newPhotos];
+    const uploadPromises = req.files.map(async (file) => {
+      try {
+        const result = await uploadToCloudinary(file.path);
+        // Delete the temporary file after upload
+        fs.unlinkSync(file.path);
+        return {
+          url: result.secure_url,
+          public_id: result.public_id,
+          order: gallery.photos.length
+        };
+      } catch (error) {
+        console.error('Error uploading to Cloudinary:', error);
+        throw error;
+      }
+    });
+
+    const uploadedPhotos = await Promise.all(uploadPromises);
+    gallery.photos.push(...uploadedPhotos);
     await gallery.save();
 
     res.json(gallery);
   } catch (error) {
+    console.error('Error updating gallery photos:', error);
+    // Clean up any temporary files if they exist
+    if (req.files) {
+      req.files.forEach(file => {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -138,20 +163,33 @@ router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, re
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    // Remove old thumbnail if exists
-    if (gallery.thumbnail) {
-      try {
-        await fs.unlink(gallery.thumbnail);
-      } catch (error) {
-        console.error('Error deleting old thumbnail:', error);
-      }
+    if (!req.file) {
+      return res.status(400).json({ message: 'No thumbnail uploaded' });
     }
 
-    gallery.thumbnail = req.file.path;
-    await gallery.save();
+    // Upload new thumbnail to Cloudinary
+    const result = await uploadToCloudinary(req.file.path);
+    
+    // Delete old thumbnail from Cloudinary if it exists
+    if (gallery.thumbnail_public_id) {
+      await cloudinary.uploader.destroy(gallery.thumbnail_public_id);
+    }
 
+    // Update gallery with new thumbnail
+    gallery.thumbnail = result.secure_url;
+    gallery.thumbnail_public_id = result.public_id;
+    
+    // Delete the temporary file
+    fs.unlinkSync(req.file.path);
+
+    await gallery.save();
     res.json(gallery);
   } catch (error) {
+    console.error('Error updating thumbnail:', error);
+    // Clean up temporary file if it exists
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ message: error.message });
   }
 });
