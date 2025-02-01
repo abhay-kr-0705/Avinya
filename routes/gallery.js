@@ -81,16 +81,79 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    const newPhotos = req.files.map(file => ({
-      url: file.path,
-      filename: file.filename
-    }));
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No photos uploaded' });
+    }
 
-    gallery.photos = [...gallery.photos, ...newPhotos];
-    await gallery.save();
+    // Upload each photo to Cloudinary and get their URLs
+    const uploadPromises = req.files.map(async (file) => {
+      const result = await uploadToCloudinary(file.path);
+      // Delete the temporary file after upload
+      fs.unlinkSync(file.path);
+      return {
+        url: result.secure_url,
+        public_id: result.public_id
+      };
+    });
 
-    res.json(gallery);
+    const uploadedPhotos = await Promise.all(uploadPromises);
+
+    // Add new photos to the gallery's photos array
+    gallery.photos.push(...uploadedPhotos);
+
+    // Save the updated gallery
+    const updatedGallery = await gallery.save();
+    res.json(updatedGallery);
   } catch (error) {
+    console.error('Error updating gallery photos:', error);
+    // Clean up any temporary files if they exist
+    if (req.files) {
+      req.files.forEach(file => {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+    }
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update gallery thumbnail
+router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, res) => {
+  try {
+    const gallery = await Gallery.findById(req.params.id);
+    if (!gallery) {
+      return res.status(404).json({ message: 'Gallery not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No thumbnail uploaded' });
+    }
+
+    // Upload thumbnail to Cloudinary
+    const result = await uploadToCloudinary(req.file.path);
+    
+    // Delete the old thumbnail from Cloudinary if it exists
+    if (gallery.thumbnail_public_id) {
+      await cloudinary.uploader.destroy(gallery.thumbnail_public_id);
+    }
+
+    // Update gallery with new thumbnail
+    gallery.thumbnail = result.secure_url;
+    gallery.thumbnail_public_id = result.public_id;
+
+    // Delete the temporary file
+    fs.unlinkSync(req.file.path);
+
+    // Save the updated gallery
+    const updatedGallery = await gallery.save();
+    res.json(updatedGallery);
+  } catch (error) {
+    console.error('Error updating gallery thumbnail:', error);
+    // Clean up temporary file if it exists
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -126,32 +189,6 @@ router.delete('/:id/photos/:photoId', protect, async (req, res) => {
     res.json(gallery);
   } catch (error) {
     console.error('Error removing photo:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Update gallery thumbnail
-router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, res) => {
-  try {
-    const gallery = await Gallery.findById(req.params.id);
-    if (!gallery) {
-      return res.status(404).json({ message: 'Gallery not found' });
-    }
-
-    // Remove old thumbnail if exists
-    if (gallery.thumbnail) {
-      try {
-        await fs.unlink(gallery.thumbnail);
-      } catch (error) {
-        console.error('Error deleting old thumbnail:', error);
-      }
-    }
-
-    gallery.thumbnail = req.file.path;
-    await gallery.save();
-
-    res.json(gallery);
-  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
