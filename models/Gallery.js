@@ -3,11 +3,29 @@ const mongoose = require('mongoose');
 const photoSchema = new mongoose.Schema({
   url: {
     type: String,
-    required: true
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v && v.length > 0;
+      },
+      message: 'URL is required'
+    }
   },
   public_id: {
     type: String,
-    default: null
+    required: function() {
+      // Only require public_id for new photos (those created after this update)
+      return this.isNew;
+    },
+    default: function() {
+      // Generate a public_id from the URL if one isn't provided
+      if (this.url) {
+        const urlParts = this.url.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        return `genx_gallery/${filename.split('.')[0]}`;
+      }
+      return null;
+    }
   },
   caption: String,
   order: {
@@ -32,10 +50,25 @@ const gallerySchema = new mongoose.Schema({
   },
   thumbnail_public_id: {
     type: String,
-    default: null
+    required: function() {
+      // Only require thumbnail_public_id for new galleries
+      return this.isNew;
+    },
+    default: function() {
+      // Generate a public_id from the thumbnail URL if one isn't provided
+      if (this.thumbnail) {
+        const urlParts = this.thumbnail.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        return `genx_gallery/${filename.split('.')[0]}`;
+      }
+      return null;
+    }
   },
   description: String,
-  photos: [photoSchema],
+  photos: {
+    type: [photoSchema],
+    default: []
+  },
   created_by: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -48,27 +81,44 @@ const gallerySchema = new mongoose.Schema({
   }
 });
 
-// Pre-save middleware to ensure photos have public_id if not set
+// Pre-save middleware to handle existing documents
 gallerySchema.pre('save', function(next) {
-  // Set default public_id for photos if not set
-  if (this.photos) {
-    this.photos.forEach(photo => {
-      if (!photo.public_id) {
-        // Extract public_id from URL or set a default value
+  // If this is an existing document
+  if (!this.isNew) {
+    // Handle photos
+    if (this.photos) {
+      this.photos.forEach(photo => {
+        if (!photo.public_id && photo.url) {
+          const urlParts = photo.url.split('/');
+          const filename = urlParts[urlParts.length - 1];
+          photo.public_id = `genx_gallery/${filename.split('.')[0]}`;
+        }
+      });
+    }
+
+    // Handle thumbnail
+    if (!this.thumbnail_public_id && this.thumbnail) {
+      const urlParts = this.thumbnail.split('/');
+      const filename = urlParts[urlParts.length - 1];
+      this.thumbnail_public_id = `genx_gallery/${filename.split('.')[0]}`;
+    }
+  }
+
+  next();
+});
+
+// Add this to handle updates
+gallerySchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate();
+  if (update.photos) {
+    update.photos.forEach(photo => {
+      if (!photo.public_id && photo.url) {
         const urlParts = photo.url.split('/');
         const filename = urlParts[urlParts.length - 1];
         photo.public_id = `genx_gallery/${filename.split('.')[0]}`;
       }
     });
   }
-
-  // Set default thumbnail_public_id if not set
-  if (this.thumbnail && !this.thumbnail_public_id) {
-    const urlParts = this.thumbnail.split('/');
-    const filename = urlParts[urlParts.length - 1];
-    this.thumbnail_public_id = `genx_gallery/${filename.split('.')[0]}`;
-  }
-
   next();
 });
 

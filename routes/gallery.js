@@ -5,11 +5,16 @@ const { protect } = require('../middleware/auth');
 const multer = require('multer');
 const { uploadToCloudinary, cloudinary } = require('../utils/cloudinary');
 const fs = require('fs');
+const path = require('path');
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    const uploadDir = 'uploads/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname);
@@ -17,11 +22,6 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-
-// Ensure uploads directory exists
-if (!fs.existsSync('uploads/')) {
-  fs.mkdirSync('uploads/');
-}
 
 // Get all galleries
 router.get('/', async (req, res) => {
@@ -88,6 +88,7 @@ router.post('/upload', protect, upload.single('image'), async (req, res) => {
 
 // Update gallery photos
 router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
+  const uploadedFiles = [];
   try {
     const gallery = await Gallery.findById(req.params.id);
     if (!gallery) {
@@ -101,46 +102,66 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
     const uploadPromises = req.files.map(async (file) => {
       try {
         console.log('Uploading file:', file.path);
-        const result = await uploadToCloudinary(file.path);
-        console.log('Upload result:', result);
+        uploadedFiles.push(file.path);
         
-        // Delete the temporary file
-        fs.unlinkSync(file.path);
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: 'genx_gallery',
+          resource_type: 'auto'
+        });
+        
+        console.log('Cloudinary upload result:', result);
         
         return {
           url: result.secure_url,
-          public_id: result.public_id || null,
+          public_id: result.public_id,
           order: gallery.photos.length
         };
       } catch (error) {
         console.error('Error uploading to Cloudinary:', error);
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
         throw error;
       }
     });
 
     const uploadedPhotos = await Promise.all(uploadPromises);
-    
+    console.log('All photos uploaded:', uploadedPhotos);
+
     // Add new photos to the gallery
     gallery.photos.push(...uploadedPhotos);
     
     // Save the gallery
     const savedGallery = await gallery.save();
-    console.log('Saved gallery:', savedGallery);
+    console.log('Gallery saved successfully');
+
+    // Clean up uploaded files
+    uploadedFiles.forEach(filePath => {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (err) {
+        console.error('Error deleting temp file:', err);
+      }
+    });
+
     res.json(savedGallery);
   } catch (error) {
-    console.error('Error updating gallery photos:', error);
-    // Clean up any temporary files
-    if (req.files) {
-      req.files.forEach(file => {
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
+    console.error('Error in photo upload:', error);
+    
+    // Clean up uploaded files on error
+    uploadedFiles.forEach(filePath => {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
         }
-      });
-    }
-    res.status(500).json({ message: error.message });
+      } catch (err) {
+        console.error('Error deleting temp file:', err);
+      }
+    });
+
+    res.status(500).json({ 
+      message: error.message,
+      details: error.stack 
+    });
   }
 });
 
@@ -181,6 +202,7 @@ router.delete('/:id/photos/:photoId', protect, async (req, res) => {
 
 // Update gallery thumbnail
 router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, res) => {
+  let uploadedFile = null;
   try {
     const gallery = await Gallery.findById(req.params.id);
     if (!gallery) {
@@ -191,14 +213,21 @@ router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, re
       return res.status(400).json({ message: 'No thumbnail uploaded' });
     }
 
-    console.log('Uploading thumbnail:', req.file.path);
-    const result = await uploadToCloudinary(req.file.path);
-    console.log('Thumbnail upload result:', result);
+    uploadedFile = req.file.path;
+    console.log('Uploading thumbnail:', uploadedFile);
+
+    const result = await cloudinary.uploader.upload(uploadedFile, {
+      folder: 'genx_gallery',
+      resource_type: 'auto'
+    });
+    
+    console.log('Cloudinary upload result:', result);
 
     // Delete old thumbnail from Cloudinary if it exists
     if (gallery.thumbnail_public_id) {
       try {
         await cloudinary.uploader.destroy(gallery.thumbnail_public_id);
+        console.log('Old thumbnail deleted from Cloudinary');
       } catch (error) {
         console.error('Error deleting old thumbnail:', error);
       }
@@ -206,22 +235,30 @@ router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, re
 
     // Update gallery with new thumbnail
     gallery.thumbnail = result.secure_url;
-    gallery.thumbnail_public_id = result.public_id || null;
-
-    // Delete the temporary file
-    fs.unlinkSync(req.file.path);
+    gallery.thumbnail_public_id = result.public_id;
 
     // Save the gallery
     const savedGallery = await gallery.save();
-    console.log('Saved gallery with new thumbnail:', savedGallery);
+    console.log('Gallery saved with new thumbnail');
+
+    // Clean up uploaded file
+    if (fs.existsSync(uploadedFile)) {
+      fs.unlinkSync(uploadedFile);
+    }
+
     res.json(savedGallery);
   } catch (error) {
-    console.error('Error updating thumbnail:', error);
-    // Clean up temporary file
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    console.error('Error in thumbnail upload:', error);
+    
+    // Clean up uploaded file on error
+    if (uploadedFile && fs.existsSync(uploadedFile)) {
+      fs.unlinkSync(uploadedFile);
     }
-    res.status(500).json({ message: error.message });
+
+    res.status(500).json({ 
+      message: error.message,
+      details: error.stack 
+    });
   }
 });
 
