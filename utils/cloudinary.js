@@ -1,4 +1,5 @@
 const cloudinary = require('cloudinary').v2;
+const fs = require('fs');
 require('dotenv').config();
 
 // Configure Cloudinary with hardcoded values
@@ -10,15 +11,26 @@ cloudinary.config({
 
 const uploadToCloudinary = async (file) => {
   try {
-    // Convert buffer to base64
-    const b64 = Buffer.from(file.buffer).toString('base64');
-    const dataURI = 'data:' + file.mimetype + ';base64,' + b64;
+    let result;
     
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(dataURI, {
-      resource_type: 'auto',
-      folder: 'genx_gallery'
-    });
+    if (typeof file === 'string') {
+      // If file is a path string
+      result = await cloudinary.uploader.upload(file, {
+        resource_type: 'auto',
+        folder: 'genx_gallery'
+      });
+    } else if (file.buffer) {
+      // If file is a multer file object with buffer
+      const b64 = Buffer.from(file.buffer).toString('base64');
+      const dataURI = 'data:' + file.mimetype + ';base64,' + b64;
+      
+      result = await cloudinary.uploader.upload(dataURI, {
+        resource_type: 'auto',
+        folder: 'genx_gallery'
+      });
+    } else {
+      throw new Error('Invalid file format');
+    }
     
     return result;
   } catch (error) {
@@ -28,5 +40,6 @@ const uploadToCloudinary = async (file) => {
 };
 
 module.exports = {
-  uploadToCloudinary
+  uploadToCloudinary,
+  cloudinary
 };
