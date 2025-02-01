@@ -5,6 +5,7 @@ const { protect } = require('../middleware/auth');
 const multer = require('multer');
 const { uploadToCloudinary } = require('../utils/cloudinary');
 const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
 
 // Configure multer for file upload
 const upload = multer({
@@ -102,21 +103,29 @@ router.delete('/:id/photos/:photoId', protect, async (req, res) => {
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    const photoIndex = gallery.photos.findIndex(photo => photo._id.toString() === req.params.photoId);
+    const photoIndex = gallery.photos.findIndex(
+      photo => photo._id.toString() === req.params.photoId
+    );
+
     if (photoIndex === -1) {
-      return res.status(404).json({ message: 'Photo not found' });
+      return res.status(404).json({ message: 'Photo not found in gallery' });
     }
 
-    // Remove the file from storage
-    const photo = gallery.photos[photoIndex];
-    await fs.unlink(photo.url);
+    // Get the photo to delete
+    const photoToDelete = gallery.photos[photoIndex];
 
-    // Remove from gallery
+    // Remove the photo from cloudinary
+    if (photoToDelete.public_id) {
+      await cloudinary.uploader.destroy(photoToDelete.public_id);
+    }
+
+    // Remove the photo from the gallery
     gallery.photos.splice(photoIndex, 1);
     await gallery.save();
 
     res.json(gallery);
   } catch (error) {
+    console.error('Error removing photo:', error);
     res.status(500).json({ message: error.message });
   }
 });
