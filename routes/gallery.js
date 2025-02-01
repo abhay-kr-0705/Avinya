@@ -352,7 +352,7 @@ router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, re
   }
 });
 
-// Delete gallery with confirmation
+// Delete gallery
 router.delete('/:id', protect, async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
@@ -360,28 +360,42 @@ router.delete('/:id', protect, async (req, res) => {
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    // Delete all photos
-    for (const photo of gallery.photos) {
+    // Delete thumbnail from Cloudinary
+    if (gallery.thumbnail_public_id) {
       try {
-        await fs.unlink(photo.url);
+        await cloudinary.uploader.destroy(gallery.thumbnail_public_id);
+        console.log('Deleted thumbnail from Cloudinary:', gallery.thumbnail_public_id);
       } catch (error) {
-        console.error('Error deleting photo:', error);
+        console.error('Error deleting thumbnail from Cloudinary:', error);
       }
     }
 
-    // Delete thumbnail
-    if (gallery.thumbnail) {
-      try {
-        await fs.unlink(gallery.thumbnail);
-      } catch (error) {
-        console.error('Error deleting thumbnail:', error);
-      }
+    // Delete all photos from Cloudinary
+    if (gallery.photos && gallery.photos.length > 0) {
+      const deletePromises = gallery.photos.map(async (photo) => {
+        if (photo.public_id) {
+          try {
+            await cloudinary.uploader.destroy(photo.public_id);
+            console.log('Deleted photo from Cloudinary:', photo.public_id);
+          } catch (error) {
+            console.error('Error deleting photo from Cloudinary:', error);
+          }
+        }
+      });
+      await Promise.all(deletePromises);
     }
 
-    await gallery.remove();
+    // Delete the gallery from database
+    await Gallery.findByIdAndDelete(req.params.id);
+    console.log('Gallery deleted successfully:', req.params.id);
+
     res.json({ message: 'Gallery deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error deleting gallery:', error);
+    res.status(500).json({ 
+      message: error.message,
+      details: error.stack 
+    });
   }
 });
 
