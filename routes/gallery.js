@@ -1,25 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const Gallery = require('../models/Gallery');
-const { protect } = require('../middleware/auth');
-const multer = require('multer');
-const { uploadToCloudinary } = require('../utils/cloudinary');
-const fs = require('fs');
-const cloudinary = require('cloudinary').v2;
-
-// Configure multer for file upload
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
-});
+const { protect } = require('../middleware/authMiddleware');
+const { upload, cloudinary } = require('../utils/cloudinary');
 
 // Get all galleries
 router.get('/', async (req, res) => {
   try {
-    const galleries = await Gallery.find()
-      .sort({ created_at: -1 });
+    const galleries = await Gallery.find().sort({ created_at: -1 });
     res.json(galleries);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -39,42 +27,39 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create gallery
-router.post('/', protect, async (req, res) => {
+// Create a new gallery
+router.post('/', protect, upload.fields([
+  { name: 'thumbnail', maxCount: 1 },
+  { name: 'photos', maxCount: 10 }
+]), async (req, res) => {
   try {
-    const { title, description, thumbnail, photos, created_by } = req.body;
-    
+    const { title, description } = req.body;
+
+    if (!req.files?.thumbnail) {
+      return res.status(400).json({ message: 'Thumbnail is required' });
+    }
+
     const gallery = new Gallery({
       title,
       description,
-      thumbnail,
-      photos,
-      created_by
+      thumbnail: req.files.thumbnail[0].path,
+      photos: req.files?.photos?.map(file => ({
+        url: file.path,
+        public_id: file.filename
+      })) || [],
+      created_by: req.user._id
     });
 
     const savedGallery = await gallery.save();
     res.status(201).json(savedGallery);
   } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// Upload image
-router.post('/upload', protect, upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
-
-    const result = await uploadToCloudinary(req.file);
-    res.json({ url: result.secure_url });
-  } catch (error) {
+    console.error('Error creating gallery:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
 // Update gallery photos
-router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
+router.put('/:id/photos', protect, upload.array('photos', 10), async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
     if (!gallery) {
@@ -85,35 +70,17 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
       return res.status(400).json({ message: 'No photos uploaded' });
     }
 
-    // Upload each photo to Cloudinary and get their URLs
-    const uploadPromises = req.files.map(async (file) => {
-      const result = await uploadToCloudinary(file.path);
-      // Delete the temporary file after upload
-      fs.unlinkSync(file.path);
-      return {
-        url: result.secure_url,
-        public_id: result.public_id
-      };
-    });
-
-    const uploadedPhotos = await Promise.all(uploadPromises);
-
     // Add new photos to the gallery's photos array
-    gallery.photos.push(...uploadedPhotos);
+    const newPhotos = req.files.map(file => ({
+      url: file.path,
+      public_id: file.filename
+    }));
 
-    // Save the updated gallery
+    gallery.photos.push(...newPhotos);
     const updatedGallery = await gallery.save();
     res.json(updatedGallery);
   } catch (error) {
     console.error('Error updating gallery photos:', error);
-    // Clean up any temporary files if they exist
-    if (req.files) {
-      req.files.forEach(file => {
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
-      });
-    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -130,30 +97,19 @@ router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, re
       return res.status(400).json({ message: 'No thumbnail uploaded' });
     }
 
-    // Upload thumbnail to Cloudinary
-    const result = await uploadToCloudinary(req.file.path);
-    
-    // Delete the old thumbnail from Cloudinary if it exists
+    // Delete old thumbnail from Cloudinary if it exists
     if (gallery.thumbnail_public_id) {
       await cloudinary.uploader.destroy(gallery.thumbnail_public_id);
     }
 
     // Update gallery with new thumbnail
-    gallery.thumbnail = result.secure_url;
-    gallery.thumbnail_public_id = result.public_id;
+    gallery.thumbnail = req.file.path;
+    gallery.thumbnail_public_id = req.file.filename;
 
-    // Delete the temporary file
-    fs.unlinkSync(req.file.path);
-
-    // Save the updated gallery
     const updatedGallery = await gallery.save();
     res.json(updatedGallery);
   } catch (error) {
     console.error('Error updating gallery thumbnail:', error);
-    // Clean up temporary file if it exists
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -193,7 +149,7 @@ router.delete('/:id/photos/:photoId', protect, async (req, res) => {
   }
 });
 
-// Delete gallery with confirmation
+// Delete gallery
 router.delete('/:id', protect, async (req, res) => {
   try {
     const gallery = await Gallery.findById(req.params.id);
@@ -201,27 +157,25 @@ router.delete('/:id', protect, async (req, res) => {
       return res.status(404).json({ message: 'Gallery not found' });
     }
 
-    // Delete all photos
-    for (const photo of gallery.photos) {
-      try {
-        await fs.unlink(photo.url);
-      } catch (error) {
-        console.error('Error deleting photo:', error);
-      }
+    // Delete all photos from Cloudinary
+    const deletePromises = gallery.photos.map(photo => 
+      photo.public_id ? cloudinary.uploader.destroy(photo.public_id) : Promise.resolve()
+    );
+
+    // Delete thumbnail from Cloudinary
+    if (gallery.thumbnail_public_id) {
+      deletePromises.push(cloudinary.uploader.destroy(gallery.thumbnail_public_id));
     }
 
-    // Delete thumbnail
-    if (gallery.thumbnail) {
-      try {
-        await fs.unlink(gallery.thumbnail);
-      } catch (error) {
-        console.error('Error deleting thumbnail:', error);
-      }
-    }
+    // Wait for all Cloudinary deletions to complete
+    await Promise.all(deletePromises);
 
-    await gallery.remove();
+    // Delete the gallery document
+    await gallery.deleteOne();
+
     res.json({ message: 'Gallery deleted successfully' });
   } catch (error) {
+    console.error('Error deleting gallery:', error);
     res.status(500).json({ message: error.message });
   }
 });
