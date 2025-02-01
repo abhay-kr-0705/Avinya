@@ -20,13 +20,6 @@ const asyncHandler = (fn) => (req, res, next) =>
     });
   });
 
-// Log middleware for debugging
-router.use((req, res, next) => {
-  console.log(`[Admin Route] ${req.method} ${req.originalUrl}`);
-  console.log('Request body:', req.body);
-  next();
-});
-
 // Protect all admin routes
 router.use(protect);
 router.use(authorize('admin', 'superadmin'));
@@ -35,7 +28,6 @@ router.use(authorize('admin', 'superadmin'));
 router.get('/users', asyncHandler(async (req, res) => {
   try {
     const users = await User.find().select('-password');
-    console.log(`Found ${users.length} users`);
     res.json({
       success: true,
       count: users.length,
@@ -51,63 +43,8 @@ router.get('/users', asyncHandler(async (req, res) => {
   }
 }));
 
-// Send notifications
-router.post('/notifications/send', asyncHandler(async (req, res) => {
-  console.log('Received notification request:', req.body);
-  const { title, message, type, userIds } = req.body;
-
-  if (!title || !message) {
-    return res.status(400).json({
-      success: false,
-      message: 'Title and message are required'
-    });
-  }
-
-  try {
-    let tokens = [];
-    
-    if (type === 'all') {
-      // Get all user tokens
-      const users = await User.find({ fcmToken: { $exists: true } });
-      tokens = users.map(user => user.fcmToken).filter(Boolean);
-      console.log(`Found ${tokens.length} tokens for all users`);
-    } else if (type === 'targeted' && userIds) {
-      // Get tokens for specific users
-      const users = await User.find({ 
-        _id: { $in: userIds },
-        fcmToken: { $exists: true }
-      });
-      tokens = users.map(user => user.fcmToken).filter(Boolean);
-      console.log(`Found ${tokens.length} tokens for targeted users`);
-    }
-
-    if (tokens.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No valid FCM tokens found for the specified users'
-      });
-    }
-
-    const result = await sendNotification(title, message, tokens);
-    console.log('Notification result:', result);
-    
-    res.json({
-      success: true,
-      message: 'Notifications sent successfully',
-      result
-    });
-  } catch (error) {
-    console.error('Error sending notification:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send notifications',
-      error: error.message
-    });
-  }
-}));
-
 // Update user role
-router.put('/users/:id/role', asyncHandler(async (req, res) => {
+router.put('/users/:id/role', protect, authorize('superadmin'), asyncHandler(async (req, res) => {
   try {
     const { role } = req.body;
     const { id } = req.params;
@@ -309,6 +246,48 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
       success: false,
       message: 'Error deleting event',
       error: err.message
+    });
+  }
+}));
+
+// Send notification
+router.post('/notifications/send', asyncHandler(async (req, res) => {
+  try {
+    const { title, message, type, userIds } = req.body;
+    
+    // Get target user tokens
+    let tokens = [];
+    if (type === 'all') {
+      const users = await User.find({ fcmToken: { $exists: true } });
+      tokens = users.map(user => user.fcmToken).filter(Boolean);
+    } else if (type === 'targeted' && userIds?.length > 0) {
+      const users = await User.find({ 
+        _id: { $in: userIds },
+        fcmToken: { $exists: true }
+      });
+      tokens = users.map(user => user.fcmToken).filter(Boolean);
+    }
+
+    if (tokens.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid FCM tokens found for the target users'
+      });
+    }
+
+    // Send notification
+    await sendNotification(title, message, tokens);
+
+    res.json({
+      success: true,
+      message: 'Notification sent successfully'
+    });
+  } catch (error) {
+    console.error('Error sending notification:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send notification',
+      error: error.message
     });
   }
 }));
