@@ -30,8 +30,14 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint (before routes)
-app.get('/api/health', (req, res) => {
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     message: 'Server is running',
@@ -39,7 +45,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API routes
+// Mount API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/resources', resourceRoutes);
@@ -47,33 +53,59 @@ app.use('/api/gallery', galleryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/fcm', fcmRoutes);
 
+// Debug route to list all registered routes
+app.get('/api/routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods)
+      });
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          routes.push({
+            path: handler.route.path,
+            methods: Object.keys(handler.route.methods)
+          });
+        }
+      });
+    }
+  });
+  res.json(routes);
+});
+
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ 
-    status: 'error',
-    message: `Route ${req.originalUrl} not found`
+  console.log('404 Not Found:', req.method, req.originalUrl);
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`
   });
 });
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  console.error('Error:', {
+    message: err.message,
+    stack: err.stack,
+    name: err.name
+  });
   res.status(err.status || 500).json({
-    status: 'error',
-    message: err.message || 'Internal Server Error'
+    success: false,
+    message: err.message || 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err : {}
   });
 });
 
 // MongoDB connection
 async function connectDB() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    console.log('MongoDB Connected Successfully');
-  } catch (err) {
-    console.error('MongoDB connection error:', err);
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('MongoDB connected successfully');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
     process.exit(1);
   }
 }
@@ -82,14 +114,15 @@ async function connectDB() {
 const PORT = process.env.PORT || 3000;
 
 connectDB().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
-    console.log(`API available at http://localhost:${PORT}/api`);
-    console.log('CORS enabled for:', corsOptions.origin);
+    console.log(`Available routes:`);
+    app._router.stack.forEach((r) => {
+      if (r.route && r.route.path) {
+        console.log(`${Object.keys(r.route.methods)} ${r.route.path}`);
+      }
+    });
   });
-}).catch(err => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
 });
 
 module.exports = app;
