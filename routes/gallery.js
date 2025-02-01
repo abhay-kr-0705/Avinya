@@ -3,17 +3,25 @@ const router = express.Router();
 const Gallery = require('../models/Gallery');
 const { protect } = require('../middleware/auth');
 const multer = require('multer');
-const { uploadToCloudinary } = require('../utils/cloudinary');
+const { uploadToCloudinary, cloudinary } = require('../utils/cloudinary');
 const fs = require('fs');
-const cloudinary = require('cloudinary').v2;
 
 // Configure multer for file upload
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
   },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
 });
+
+const upload = multer({ storage: storage });
+
+// Ensure uploads directory exists
+if (!fs.existsSync('uploads/')) {
+  fs.mkdirSync('uploads/');
+}
 
 // Get all galleries
 router.get('/', async (req, res) => {
@@ -66,9 +74,14 @@ router.post('/upload', protect, upload.single('image'), async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const result = await uploadToCloudinary(req.file);
+    const result = await uploadToCloudinary(req.file.path);
+    fs.unlinkSync(req.file.path);
     res.json({ url: result.secure_url });
   } catch (error) {
+    console.error('Error uploading to Cloudinary:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -87,9 +100,13 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
 
     const uploadPromises = req.files.map(async (file) => {
       try {
+        console.log('Uploading file:', file.path);
         const result = await uploadToCloudinary(file.path);
-        // Delete the temporary file after upload
+        console.log('Upload result:', result);
+        
+        // Delete the temporary file
         fs.unlinkSync(file.path);
+        
         return {
           url: result.secure_url,
           public_id: result.public_id,
@@ -97,18 +114,20 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
         };
       } catch (error) {
         console.error('Error uploading to Cloudinary:', error);
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
         throw error;
       }
     });
 
     const uploadedPhotos = await Promise.all(uploadPromises);
     gallery.photos.push(...uploadedPhotos);
-    await gallery.save();
-
-    res.json(gallery);
+    const savedGallery = await gallery.save();
+    res.json(savedGallery);
   } catch (error) {
     console.error('Error updating gallery photos:', error);
-    // Clean up any temporary files if they exist
+    // Clean up any temporary files
     if (req.files) {
       req.files.forEach(file => {
         if (fs.existsSync(file.path)) {
@@ -167,26 +186,31 @@ router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, re
       return res.status(400).json({ message: 'No thumbnail uploaded' });
     }
 
-    // Upload new thumbnail to Cloudinary
+    console.log('Uploading thumbnail:', req.file.path);
     const result = await uploadToCloudinary(req.file.path);
-    
+    console.log('Thumbnail upload result:', result);
+
     // Delete old thumbnail from Cloudinary if it exists
     if (gallery.thumbnail_public_id) {
-      await cloudinary.uploader.destroy(gallery.thumbnail_public_id);
+      try {
+        await cloudinary.uploader.destroy(gallery.thumbnail_public_id);
+      } catch (error) {
+        console.error('Error deleting old thumbnail:', error);
+      }
     }
 
     // Update gallery with new thumbnail
     gallery.thumbnail = result.secure_url;
     gallery.thumbnail_public_id = result.public_id;
-    
+
     // Delete the temporary file
     fs.unlinkSync(req.file.path);
 
-    await gallery.save();
-    res.json(gallery);
+    const savedGallery = await gallery.save();
+    res.json(savedGallery);
   } catch (error) {
     console.error('Error updating thumbnail:', error);
-    // Clean up temporary file if it exists
+    // Clean up temporary file
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
