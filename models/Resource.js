@@ -21,9 +21,21 @@ const resourceSchema = new mongoose.Schema({
   domain: {
     type: String,
     required: false,
-    enum: ['Web Development', 'Mobile Development', 'Machine Learning', 'Data Science', 
-           'Cybersecurity', 'Cloud Computing', 'DevOps', 'Blockchain', 'UI/UX Design', 
-           'Programming Languages', 'Other']
+    enum: [
+      'Web Development',
+      'AI and ML',
+      'Data Science',
+      'Cybersecurity',
+      'Cloud Computing',
+      'DevOps',
+      'Blockchain',
+      'UI/UX Design',
+      'Competitive Programming',
+      'Robotics and IoT',
+      'Creativity',
+      'Outreach',
+      'Other'
+    ]
   },
   uploaded_by: {
     type: mongoose.Schema.Types.ObjectId,
