@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Event = require('../models/Event');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize } = require('../../middleware/auth');
 
 // Error handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>

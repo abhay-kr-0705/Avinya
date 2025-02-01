@@ -1,20 +1,46 @@
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
-require('dotenv').config();
+const path = require('path');
 
-// Configure Cloudinary with environment variables
+// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const uploadToCloudinary = async (file) => {
+// Configure multer for temporary storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+// Create multer upload middleware
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: function (req, file, cb) {
+    const filetypes = /jpeg|jpg|png|gif/;
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = filetypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
+});
+
+// Function to upload file to Cloudinary
+const uploadToCloudinary = async (filePath) => {
   try {
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: 'gallery',
-      resource_type: 'auto'
+    const result = await cloudinary.uploader.upload(filePath, {
+      folder: 'gallery'
     });
     return result;
   } catch (error) {
@@ -23,20 +49,8 @@ const uploadToCloudinary = async (file) => {
   }
 };
 
-// Configure Cloudinary storage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'gallery',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
-  },
-});
-
-// Create multer upload middleware
-const upload = multer({ storage: storage });
-
 module.exports = {
-  uploadToCloudinary,
   upload,
+  uploadToCloudinary,
   cloudinary
 };

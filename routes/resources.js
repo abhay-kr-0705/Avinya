@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Resource = require('../models/Resource');
-const { protect } = require('../middleware/auth');
+const { protect } = require('../../middleware/auth');
 
 // Get all resources
 router.get('/', async (req, res) => {
