@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Event = require('../models/Event');
 const { protect, authorize } = require('../middleware/auth');
+const { sendNotification } = require('../controllers/notificationController');
 
 // Error handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>
@@ -248,5 +249,8 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
     });
   }
 }));
+
+// Notification routes
+router.post('/notifications/send', protect, authorize('admin'), sendNotification);
 
 module.exports = router;
