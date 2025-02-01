@@ -17,14 +17,29 @@ dotenv.config();
 const app = express();
 
 // CORS configuration
-const corsOptions = {
-  origin: ['https://genx-developers-club.netlify.app', 'http://localhost:5173', 'http://127.0.0.1:5173'],
+app.use(cors({
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'https://genx-developers-club.netlify.app'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      console.log('Blocked by CORS:', origin);
+      return callback(new Error('Not allowed by CORS'));
+    }
+    
+    console.log('Allowed by CORS:', origin);
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-};
-
-app.use(cors(corsOptions));
+}));
 
 // Body parser middleware
 app.use(express.json());
@@ -32,7 +47,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log('Headers:', req.headers);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('Body:', req.body);
+  }
   next();
 });
 
@@ -65,8 +84,9 @@ app.get('/api/routes', (req, res) => {
     } else if (middleware.name === 'router') {
       middleware.handle.stack.forEach((handler) => {
         if (handler.route) {
+          const fullPath = handler.route.path;
           routes.push({
-            path: handler.route.path,
+            path: fullPath,
             methods: Object.keys(handler.route.methods)
           });
         }
@@ -78,7 +98,12 @@ app.get('/api/routes', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
-  console.log('404 Not Found:', req.method, req.originalUrl);
+  console.log('404 Not Found:', {
+    method: req.method,
+    url: req.originalUrl,
+    headers: req.headers,
+    body: req.body
+  });
   res.status(404).json({
     success: false,
     message: `Route not found: ${req.method} ${req.originalUrl}`
@@ -90,7 +115,9 @@ app.use((err, req, res, next) => {
   console.error('Error:', {
     message: err.message,
     stack: err.stack,
-    name: err.name
+    name: err.name,
+    path: req.path,
+    method: req.method
   });
   res.status(err.status || 500).json({
     success: false,
@@ -116,7 +143,7 @@ const PORT = process.env.PORT || 3000;
 connectDB().then(() => {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
-    console.log(`Available routes:`);
+    console.log('Available routes:');
     app._router.stack.forEach((r) => {
       if (r.route && r.route.path) {
         console.log(`${Object.keys(r.route.methods)} ${r.route.path}`);
