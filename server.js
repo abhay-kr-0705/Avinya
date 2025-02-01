@@ -73,27 +73,34 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/fcm', fcmRoutes);
 
 // Debug route to list all registered routes
-app.get('/api/routes', (req, res) => {
+app.get('/api/debug/routes', (req, res) => {
   const routes = [];
-  app._router.stack.forEach((middleware) => {
-    if (middleware.route) {
-      routes.push({
-        path: middleware.route.path,
-        methods: Object.keys(middleware.route.methods)
-      });
-    } else if (middleware.name === 'router') {
-      middleware.handle.stack.forEach((handler) => {
-        if (handler.route) {
-          const fullPath = handler.route.path;
-          routes.push({
-            path: fullPath,
-            methods: Object.keys(handler.route.methods)
-          });
-        }
-      });
-    }
+  
+  // Helper function to extract routes from a router
+  const extractRoutes = (stack, prefix = '') => {
+    stack.forEach((middleware) => {
+      if (middleware.route) {
+        routes.push({
+          path: prefix + middleware.route.path,
+          methods: Object.keys(middleware.route.methods),
+          stack: middleware.route.stack.length
+        });
+      } else if (middleware.name === 'router') {
+        // Recursively extract routes from nested routers
+        const routerPath = middleware.regexp.source.replace('^\\/','').replace('\\/?(?=\\/|$)','');
+        extractRoutes(middleware.handle.stack, '/' + routerPath);
+      }
+    });
+  };
+
+  // Extract routes from main app
+  extractRoutes(app._router.stack);
+
+  res.json({
+    routes,
+    routeCount: routes.length,
+    timestamp: new Date().toISOString()
   });
-  res.json(routes);
 });
 
 // 404 handler
@@ -106,7 +113,8 @@ app.use((req, res) => {
   });
   res.status(404).json({
     success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+    availableRoutes: '/api/debug/routes'
   });
 });
 
