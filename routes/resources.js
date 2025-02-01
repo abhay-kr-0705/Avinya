@@ -3,67 +3,91 @@ const router = express.Router();
 const Resource = require('../models/Resource');
 const { protect } = require('../middleware/auth');
 
-// Get all resources
+// @desc    Get all resources
+// @route   GET /api/resources
+// @access  Public
 router.get('/', async (req, res) => {
   try {
     const resources = await Resource.find().sort({ created_at: -1 });
     res.json(resources);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: 'Server Error', error: error.message });
   }
 });
 
-// Create a new resource
+// @desc    Create new resource
+// @route   POST /api/resources
+// @access  Private
 router.post('/', protect, async (req, res) => {
-  const resource = new Resource({
-    ...req.body,
-    uploaded_by: req.user.id
-  });
-
   try {
-    const newResource = await resource.save();
-    res.status(201).json(newResource);
+    const { title, description, url, type, domain } = req.body;
+
+    const resource = await Resource.create({
+      title,
+      description,
+      url,
+      type,
+      domain,
+      uploaded_by: req.user.id
+    });
+
+    res.status(201).json({ success: true, data: resource });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(400).json({ success: false, message: 'Invalid data', error: error.message });
   }
 });
 
-// Update a resource
+// @desc    Update resource
+// @route   PUT /api/resources/:id
+// @access  Private
 router.put('/:id', protect, async (req, res) => {
   try {
+    const { title, description, url, type, domain } = req.body;
+
     const resource = await Resource.findById(req.params.id);
+
     if (!resource) {
-      return res.status(404).json({ message: 'Resource not found' });
+      return res.status(404).json({ success: false, message: 'Resource not found' });
     }
 
-    if (resource.uploaded_by.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized' });
+    // Make sure user owns resource
+    if (resource.uploaded_by.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to update this resource' });
     }
 
-    Object.assign(resource, req.body);
-    const updatedResource = await resource.save();
-    res.json(updatedResource);
+    const updatedResource = await Resource.findByIdAndUpdate(
+      req.params.id,
+      { title, description, url, type, domain },
+      { new: true, runValidators: true }
+    );
+
+    res.json({ success: true, data: updatedResource });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(400).json({ success: false, message: 'Invalid data', error: error.message });
   }
 });
 
-// Delete a resource
+// @desc    Delete resource
+// @route   DELETE /api/resources/:id
+// @access  Private
 router.delete('/:id', protect, async (req, res) => {
   try {
     const resource = await Resource.findById(req.params.id);
+
     if (!resource) {
-      return res.status(404).json({ message: 'Resource not found' });
+      return res.status(404).json({ success: false, message: 'Resource not found' });
     }
 
-    if (resource.uploaded_by.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized' });
+    // Make sure user owns resource
+    if (resource.uploaded_by.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to delete this resource' });
     }
 
-    await Resource.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Resource deleted' });
+    await resource.remove();
+
+    res.json({ success: true, data: {} });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: 'Server Error', error: error.message });
   }
 });
 

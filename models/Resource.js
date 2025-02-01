@@ -18,6 +18,13 @@ const resourceSchema = new mongoose.Schema({
     required: true,
     enum: ['document', 'video', 'link']
   },
+  domain: {
+    type: String,
+    required: false,
+    enum: ['Web Development', 'Mobile Development', 'Machine Learning', 'Data Science', 
+           'Cybersecurity', 'Cloud Computing', 'DevOps', 'Blockchain', 'UI/UX Design', 
+           'Programming Languages', 'Other']
+  },
   uploaded_by: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
