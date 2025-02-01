@@ -7,7 +7,7 @@ const photoSchema = new mongoose.Schema({
   },
   public_id: {
     type: String,
-    required: true
+    default: null
   },
   caption: String,
   order: {
@@ -32,7 +32,7 @@ const gallerySchema = new mongoose.Schema({
   },
   thumbnail_public_id: {
     type: String,
-    required: true
+    default: null
   },
   description: String,
   photos: [photoSchema],
@@ -46,6 +46,30 @@ const gallerySchema = new mongoose.Schema({
     createdAt: 'created_at',
     updatedAt: 'updated_at'
   }
+});
+
+// Pre-save middleware to ensure photos have public_id if not set
+gallerySchema.pre('save', function(next) {
+  // Set default public_id for photos if not set
+  if (this.photos) {
+    this.photos.forEach(photo => {
+      if (!photo.public_id) {
+        // Extract public_id from URL or set a default value
+        const urlParts = photo.url.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        photo.public_id = `genx_gallery/${filename.split('.')[0]}`;
+      }
+    });
+  }
+
+  // Set default thumbnail_public_id if not set
+  if (this.thumbnail && !this.thumbnail_public_id) {
+    const urlParts = this.thumbnail.split('/');
+    const filename = urlParts[urlParts.length - 1];
+    this.thumbnail_public_id = `genx_gallery/${filename.split('.')[0]}`;
+  }
+
+  next();
 });
 
 module.exports = mongoose.model('Gallery', gallerySchema);

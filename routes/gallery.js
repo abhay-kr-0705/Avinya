@@ -109,7 +109,7 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
         
         return {
           url: result.secure_url,
-          public_id: result.public_id,
+          public_id: result.public_id || null,
           order: gallery.photos.length
         };
       } catch (error) {
@@ -122,8 +122,13 @@ router.put('/:id/photos', protect, upload.array('photos'), async (req, res) => {
     });
 
     const uploadedPhotos = await Promise.all(uploadPromises);
+    
+    // Add new photos to the gallery
     gallery.photos.push(...uploadedPhotos);
+    
+    // Save the gallery
     const savedGallery = await gallery.save();
+    console.log('Saved gallery:', savedGallery);
     res.json(savedGallery);
   } catch (error) {
     console.error('Error updating gallery photos:', error);
@@ -201,12 +206,14 @@ router.put('/:id/thumbnail', protect, upload.single('thumbnail'), async (req, re
 
     // Update gallery with new thumbnail
     gallery.thumbnail = result.secure_url;
-    gallery.thumbnail_public_id = result.public_id;
+    gallery.thumbnail_public_id = result.public_id || null;
 
     // Delete the temporary file
     fs.unlinkSync(req.file.path);
 
+    // Save the gallery
     const savedGallery = await gallery.save();
+    console.log('Saved gallery with new thumbnail:', savedGallery);
     res.json(savedGallery);
   } catch (error) {
     console.error('Error updating thumbnail:', error);
