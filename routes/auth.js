@@ -230,9 +230,8 @@ router.post('/logout', (req, res) => {
 // Update user profile
 router.put('/users/profile', protect, async (req, res) => {
   try {
-    const { name, registration_no, branch, semester, mobile } = req.body;
     const user = await User.findById(req.user.id);
-
+    
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -240,46 +239,32 @@ router.put('/users/profile', protect, async (req, res) => {
       });
     }
 
-    // Check if registration number is being changed and if it's already taken
-    if (registration_no && registration_no !== user.registration_no) {
-      const existingUser = await User.findOne({ registration_no });
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message: 'Registration number is already taken'
-        });
+    const updateFields = ['name', 'email', 'registration_no', 'branch', 'semester', 'mobile'];
+    updateFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
       }
-    }
+    });
 
-    // Update user fields if provided
-    if (name) user.name = name;
-    if (registration_no) user.registration_no = registration_no;
-    if (branch) user.branch = branch;
-    if (semester) user.semester = semester;
-    if (mobile) user.mobile = mobile;
-
-    // Save the updated user
     await user.save();
 
     res.json({
       success: true,
+      message: 'Profile updated successfully',
       user: {
-        id: user._id,
         name: user.name,
         email: user.email,
         registration_no: user.registration_no,
         branch: user.branch,
         semester: user.semester,
-        mobile: user.mobile,
-        isAdmin: user.isAdmin,
-        role: user.role
+        mobile: user.mobile
       }
     });
-  } catch (err) {
-    console.error('Profile update error:', err);
+  } catch (error) {
+    console.error('Profile update error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating profile'
+      message: 'Failed to update profile'
     });
   }
 });
