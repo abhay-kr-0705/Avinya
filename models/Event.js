@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { sendNotificationToAllUsers } = require('../services/notificationService');
 
 const registrationSchema = new mongoose.Schema({
   user: {
@@ -79,6 +80,16 @@ eventSchema.index({ created_at: -1 });
 eventSchema.pre('save', function(next) {
   this.updated_at = Date.now();
   next();
+});
+
+// Add post-save middleware to send notifications
+eventSchema.post('save', async function(doc) {
+  if (this.isNew) {
+    await sendNotificationToAllUsers(
+      'New Event Added!',
+      `${doc.title} - ${doc.description.substring(0, 100)}...`
+    );
+  }
 });
 
 module.exports = mongoose.model('Event', eventSchema);

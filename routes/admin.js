@@ -24,6 +24,49 @@ const asyncHandler = (fn) => (req, res, next) =>
 router.use(protect);
 router.use(authorize('admin', 'superadmin'));
 
+// Send notifications
+router.post('/notifications/send', asyncHandler(async (req, res) => {
+  const { title, message, type, userIds } = req.body;
+  
+  try {
+    let tokens = [];
+    
+    if (type === 'all') {
+      // Get all user tokens
+      const users = await User.find({ fcmToken: { $exists: true } });
+      tokens = users.map(user => user.fcmToken).filter(Boolean);
+    } else if (type === 'targeted' && userIds) {
+      // Get tokens for specific users
+      const users = await User.find({ 
+        _id: { $in: userIds },
+        fcmToken: { $exists: true }
+      });
+      tokens = users.map(user => user.fcmToken).filter(Boolean);
+    }
+
+    if (tokens.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid FCM tokens found for the specified users'
+      });
+    }
+
+    await sendNotification(title, message, tokens);
+    
+    res.json({
+      success: true,
+      message: 'Notifications sent successfully'
+    });
+  } catch (error) {
+    console.error('Error sending notification:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send notifications',
+      error: error.message
+    });
+  }
+}));
+
 // Get all users
 router.get('/users', asyncHandler(async (req, res) => {
   try {
