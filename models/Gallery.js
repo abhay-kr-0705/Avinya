@@ -5,10 +5,6 @@ const photoSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  public_id: {
-    type: String,
-    required: true
-  },
   caption: String,
   order: {
     type: Number,
@@ -26,17 +22,11 @@ const gallerySchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  description: {
-    type: String,
-    required: true
-  },
   thumbnail: {
     type: String,
     required: true
   },
-  thumbnail_public_id: {
-    type: String
-  },
+  description: String,
   photos: [photoSchema],
   created_by: {
     type: mongoose.Schema.Types.ObjectId,

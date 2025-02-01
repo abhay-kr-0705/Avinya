@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Event = require('../models/Event');
 const EventRegistration = require('../models/EventRegistration');
-const { protect, authorize } = require('../../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 const { sendEventConfirmation } = require('../utils/email');
 
 // Get user's registrations - IMPORTANT: This must come before other routes
