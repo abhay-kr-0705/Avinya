@@ -1,7 +1,7 @@
 const express = require('express');
 const { updateFCMToken } = require('../controllers/fcmController');
 const { sendTestNotification } = require('../controllers/testNotification');
-const { protect } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
