@@ -2,29 +2,53 @@ const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
 
 exports.updateFCMToken = catchAsync(async (req, res) => {
+  console.log('Updating FCM token. Request body:', req.body);
+  console.log('User:', req.user._id);
+  
   const { fcmToken } = req.body;
   
-  console.log('Updating FCM token for user:', req.user._id);
-  console.log('FCM Token:', fcmToken);
-  
   if (!fcmToken) {
-    console.log('No FCM token provided');
+    console.log('No FCM token provided in request');
     return res.status(400).json({
       status: 'error',
       message: 'FCM token is required'
     });
   }
 
-  const updatedUser = await User.findByIdAndUpdate(
-    req.user._id, 
-    { fcmToken },
-    { new: true }
-  );
+  try {
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { fcmToken },
+      { new: true, runValidators: true }
+    );
 
-  console.log('User updated with FCM token:', updatedUser);
+    if (!updatedUser) {
+      console.log('User not found:', req.user._id);
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
 
-  res.status(200).json({
-    status: 'success',
-    message: 'FCM token updated successfully'
-  });
+    console.log('User updated successfully:', {
+      userId: updatedUser._id,
+      fcmToken: updatedUser.fcmToken
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'FCM token updated successfully',
+      data: {
+        userId: updatedUser._id,
+        fcmToken: updatedUser.fcmToken
+      }
+    });
+  } catch (error) {
+    console.error('Error updating FCM token:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to update FCM token',
+      error: error.message
+    });
+  }
 });
