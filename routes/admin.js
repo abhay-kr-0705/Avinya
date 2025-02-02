@@ -20,7 +20,21 @@ const asyncHandler = (fn) => (req, res, next) =>
     });
   });
 
-// Apply protect and authorize middleware to all admin routes
+// Log middleware for debugging
+router.use((req, res, next) => {
+  console.log('Admin route accessed:', {
+    path: req.path,
+    method: req.method,
+    user: req.user ? {
+      id: req.user._id,
+      email: req.user.email,
+      role: req.user.role
+    } : null
+  });
+  next();
+});
+
+// Protect all admin routes
 router.use(protect);
 router.use(authorize('admin', 'superadmin'));
 
@@ -44,7 +58,7 @@ router.get('/users', asyncHandler(async (req, res) => {
 }));
 
 // Update user role
-router.put('/users/:id/role', asyncHandler(async (req, res) => {
+router.put('/users/:id/role', protect, authorize('superadmin'), asyncHandler(async (req, res) => {
   try {
     const { role } = req.body;
     const { id } = req.params;
