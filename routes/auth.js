@@ -320,4 +320,51 @@ router.put('/change-password', protect, async (req, res) => {
   }
 });
 
+// Set admin role for specific email
+router.post('/set-admin', protect, async (req, res) => {
+  try {
+    const { email } = req.body;
+    const adminEmails = ['abhayk7481@gmail.com', 'genx.gdc@gmail.com'];
+    
+    if (!adminEmails.includes(email)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to set admin role for this email' 
+      });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    user.isAdmin = true;
+    user.role = 'admin';
+    await user.save();
+
+    console.log('Updated user to admin:', user.email);
+
+    res.json({
+      success: true,
+      message: 'User updated to admin successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error('Set admin error:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error setting admin role',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
 module.exports = router;

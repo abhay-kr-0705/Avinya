@@ -20,7 +20,7 @@ const asyncHandler = (fn) => (req, res, next) =>
     });
   });
 
-// Protect all admin routes
+// Apply protect and authorize middleware to all admin routes
 router.use(protect);
 router.use(authorize('admin', 'superadmin'));
 
@@ -44,7 +44,7 @@ router.get('/users', asyncHandler(async (req, res) => {
 }));
 
 // Update user role
-router.put('/users/:id/role', protect, authorize('superadmin'), asyncHandler(async (req, res) => {
+router.put('/users/:id/role', asyncHandler(async (req, res) => {
   try {
     const { role } = req.body;
     const { id } = req.params;
