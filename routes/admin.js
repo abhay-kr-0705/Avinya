@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Event = require('../models/Event');
 const { protect, authorize } = require('../middleware/auth');
 const { sendNotification } = require('../controllers/notificationController');
+const { sendEmailToUsers } = require('../controllers/emailController');
 
 // Error handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>
@@ -316,6 +317,11 @@ router.post('/notifications/send', asyncHandler(async (req, res) => {
       error: error.message
     });
   }
+}));
+
+// Send email to users
+router.post('/send-email', protect, authorize('admin', 'superadmin'), asyncHandler(async (req, res) => {
+  await sendEmailToUsers(req, res);
 }));
 
 module.exports = router;
