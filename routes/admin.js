@@ -254,21 +254,31 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
 router.post('/notifications/send', asyncHandler(async (req, res) => {
   try {
     const { title, message, type, userIds } = req.body;
+    console.log('Received notification request:', { title, message, type, userIds });
     
     // Get target user tokens
     let tokens = [];
+    let users = [];
+    
     if (type === 'all') {
-      const users = await User.find({ fcmToken: { $exists: true } });
+      users = await User.find({ fcmToken: { $exists: true } });
+      console.log('Found users with FCM tokens:', users.length);
+      console.log('User details:', users.map(u => ({ id: u._id, email: u.email, fcmToken: u.fcmToken })));
       tokens = users.map(user => user.fcmToken).filter(Boolean);
     } else if (type === 'targeted' && userIds?.length > 0) {
-      const users = await User.find({ 
+      users = await User.find({ 
         _id: { $in: userIds },
         fcmToken: { $exists: true }
       });
+      console.log('Found targeted users with FCM tokens:', users.length);
+      console.log('Targeted user details:', users.map(u => ({ id: u._id, email: u.email, fcmToken: u.fcmToken })));
       tokens = users.map(user => user.fcmToken).filter(Boolean);
     }
 
+    console.log('Valid FCM tokens:', tokens.length);
+
     if (tokens.length === 0) {
+      console.log('No valid FCM tokens found');
       return res.status(400).json({
         success: false,
         message: 'No valid FCM tokens found for the target users'
@@ -276,7 +286,9 @@ router.post('/notifications/send', asyncHandler(async (req, res) => {
     }
 
     // Send notification
-    await sendNotification(title, message, tokens);
+    console.log('Sending notification to tokens:', tokens);
+    const result = await sendNotification(title, message, tokens);
+    console.log('Notification send result:', result);
 
     res.json({
       success: true,
