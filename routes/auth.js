@@ -157,11 +157,15 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Update admin status if needed
-    if (email === 'abhayk7481@gmail.com' || email === 'genx.gdc@gmail.com') {
-      user.isAdmin = true;
-      user.role = 'admin';
-      await user.save();
+    // Update admin status for specific users
+    const adminEmails = ['abhayk7481@gmail.com', 'genx.gdc@gmail.com'];
+    if (adminEmails.includes(email)) {
+      if (!user.isAdmin || user.role !== 'admin') {
+        user.isAdmin = true;
+        user.role = 'admin';
+        await user.save();
+        console.log('Updated user to admin:', user.email);
+      }
     }
 
     // Create token
@@ -170,6 +174,14 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
+
+    // Log user data for debugging
+    console.log('User logged in:', {
+      id: user._id,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      role: user.role
+    });
 
     res.json({
       success: true,
