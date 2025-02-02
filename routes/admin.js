@@ -3,8 +3,6 @@ const router = express.Router();
 const User = require('../models/User');
 const Event = require('../models/Event');
 const { protect, authorize } = require('../middleware/auth');
-const { sendNotification } = require('../controllers/notificationController');
-const { sendEmailToUsers } = require('../controllers/emailController');
 
 // Error handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>
@@ -20,20 +18,6 @@ const asyncHandler = (fn) => (req, res, next) =>
       error: error.message
     });
   });
-
-// Log middleware for debugging
-router.use((req, res, next) => {
-  console.log('Admin route accessed:', {
-    path: req.path,
-    method: req.method,
-    user: req.user ? {
-      id: req.user._id,
-      email: req.user.email,
-      role: req.user.role
-    } : null
-  });
-  next();
-});
 
 // Protect all admin routes
 router.use(protect);
@@ -263,65 +247,6 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
       error: err.message
     });
   }
-}));
-
-// Send notification
-router.post('/notifications/send', asyncHandler(async (req, res) => {
-  try {
-    const { title, message, type, userIds } = req.body;
-    console.log('Received notification request:', { title, message, type, userIds });
-    
-    // Get target user tokens
-    let tokens = [];
-    let users = [];
-    
-    if (type === 'all') {
-      users = await User.find({ fcmToken: { $exists: true } });
-      console.log('Found users with FCM tokens:', users.length);
-      console.log('User details:', users.map(u => ({ id: u._id, email: u.email, fcmToken: u.fcmToken })));
-      tokens = users.map(user => user.fcmToken).filter(Boolean);
-    } else if (type === 'targeted' && userIds?.length > 0) {
-      users = await User.find({ 
-        _id: { $in: userIds },
-        fcmToken: { $exists: true }
-      });
-      console.log('Found targeted users with FCM tokens:', users.length);
-      console.log('Targeted user details:', users.map(u => ({ id: u._id, email: u.email, fcmToken: u.fcmToken })));
-      tokens = users.map(user => user.fcmToken).filter(Boolean);
-    }
-
-    console.log('Valid FCM tokens:', tokens.length);
-
-    if (tokens.length === 0) {
-      console.log('No valid FCM tokens found');
-      return res.status(400).json({
-        success: false,
-        message: 'No valid FCM tokens found for the target users'
-      });
-    }
-
-    // Send notification
-    console.log('Sending notification to tokens:', tokens);
-    const result = await sendNotification(title, message, tokens);
-    console.log('Notification send result:', result);
-
-    res.json({
-      success: true,
-      message: 'Notification sent successfully'
-    });
-  } catch (error) {
-    console.error('Error sending notification:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send notification',
-      error: error.message
-    });
-  }
-}));
-
-// Send email to users
-router.post('/send-email', protect, authorize('admin', 'superadmin'), asyncHandler(async (req, res) => {
-  await sendEmailToUsers(req, res);
 }));
 
 module.exports = router;

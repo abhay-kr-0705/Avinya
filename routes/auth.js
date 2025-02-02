@@ -157,38 +157,19 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Update admin status for specific users
-    const adminEmails = ['abhayk7481@gmail.com', 'genx.gdc@gmail.com'];
-    if (adminEmails.includes(email)) {
-      if (!user.isAdmin || user.role !== 'admin') {
-        user.isAdmin = true;
-        user.role = 'admin';
-        await user.save();
-        console.log('Updated user to admin:', {
-          email: user.email,
-          isAdmin: user.isAdmin,
-          role: user.role
-        });
-      }
+    // Update admin status if needed
+    if (email === 'abhayk7481@gmail.com' || email === 'genx.gdc@gmail.com') {
+      user.isAdmin = true;
+      user.role = 'admin';
+      await user.save();
     }
 
     // Create token
     const token = jwt.sign(
-      { 
-        id: user._id,
-        role: user.role, // Include role in token
-        isAdmin: user.isAdmin // Include isAdmin in token
-      },
+      { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
-
-    // Log successful login
-    console.log('User logged in successfully:', {
-      email: user.email,
-      role: user.role,
-      isAdmin: user.isAdmin
-    });
 
     res.json({
       success: true,
@@ -249,9 +230,8 @@ router.post('/logout', (req, res) => {
 // Update user profile
 router.put('/update-profile', protect, async (req, res) => {
   try {
-    const { name, registration_no, branch, semester, mobile } = req.body;
     const user = await User.findById(req.user.id);
-
+    
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -259,61 +239,32 @@ router.put('/update-profile', protect, async (req, res) => {
       });
     }
 
-    // Update user fields
-    if (name) user.name = name;
-    if (registration_no) user.registration_no = registration_no;
-    if (branch) user.branch = branch;
-    if (semester) user.semester = semester;
-    if (mobile) user.mobile = mobile;
+    const updateFields = ['name', 'email', 'registration_no', 'branch', 'semester', 'mobile'];
+    updateFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
+      }
+    });
 
     await user.save();
 
-    // Log successful update
-    console.log('Profile updated successfully:', {
-      userId: user._id,
-      email: user.email,
-      updates: req.body
-    });
-
     res.json({
       success: true,
+      message: 'Profile updated successfully',
       user: {
-        id: user._id,
         name: user.name,
         email: user.email,
         registration_no: user.registration_no,
         branch: user.branch,
         semester: user.semester,
-        mobile: user.mobile,
-        isAdmin: user.isAdmin,
-        role: user.role
+        mobile: user.mobile
       }
     });
-  } catch (err) {
-    console.error('Profile update error:', err);
-    
-    // Handle MongoDB duplicate key errors
-    if (err.code === 11000) {
-      const field = Object.keys(err.keyPattern)[0];
-      return res.status(400).json({
-        success: false,
-        message: `User with this ${field.replace('_', ' ')} already exists`
-      });
-    }
-
-    // Handle validation errors
-    if (err.name === 'ValidationError') {
-      const messages = Object.values(err.errors).map(error => error.message);
-      return res.status(400).json({
-        success: false,
-        message: messages.join(', ')
-      });
-    }
-
+  } catch (error) {
+    console.error('Profile update error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating profile',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: 'Failed to update profile'
     });
   }
 });

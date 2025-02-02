@@ -62,10 +62,6 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  fcmToken: {
-    type: String,
-    trim: true
-  },
   role: {
     type: String,
     enum: {

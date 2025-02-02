@@ -9,7 +9,6 @@ const eventRoutes = require('./routes/events');
 const resourceRoutes = require('./routes/resources');
 const galleryRoutes = require('./routes/gallery');
 const adminRoutes = require('./routes/admin');
-const fcmRoutes = require('./routes/fcmRoutes');
 
 // Load environment variables
 dotenv.config();
@@ -45,7 +44,6 @@ app.use('/api/events', eventRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/fcm', fcmRoutes);
 
 // 404 handler
 app.use((req, res) => {
