@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const helmet = require('helmet'); // Import Helmet for security headers
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -24,6 +25,16 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Security Middleware
+app.use(helmet()); // Adds security headers
+
+// Additional headers to prevent clickjacking
+app.use((req, res, next) => {
+  res.setHeader("X-Frame-Options", "DENY"); // Blocks all iframe embedding
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'"); // No iframe embedding allowed
+  next();
+});
 
 // Body parser middleware
 app.use(express.json());
