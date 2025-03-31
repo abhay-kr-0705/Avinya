@@ -18,13 +18,29 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: ['https://genx-developers-club.netlify.app', 'http://localhost:5173'],
+  origin: ['https://genx-developers-club.netlify.app', 'https://avinya-tech-fest-sec-sasaram.netlify.app', 'http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
+
+// CORS middleware to ensure headers are set for all responses
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || corsOptions.origin[0]);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', corsOptions.methods.join(','));
+  res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send();
+  }
+  next();
+});
 
 // Security Middleware
 app.use(helmet()); // Adds security headers
@@ -58,6 +74,10 @@ app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {
+  // Set CORS headers on 404 responses too
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   res.status(404).json({ 
     status: 'error',
     message: `Route ${req.originalUrl} not found`
@@ -67,6 +87,11 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
+  
+  // Set CORS headers on error responses too
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   res.status(err.status || 500).json({
     status: 'error',
     message: err.message || 'Internal Server Error'
