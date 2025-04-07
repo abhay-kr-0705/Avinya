@@ -59,11 +59,55 @@ router.get('/:eventId/registrations', protect, authorize('admin', 'superadmin'),
 // Get all events (public access)
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find().sort({ date: 1 });
-    res.json(events);
+    console.log('Fetching all events...');
+    
+    // Get all events and sort by date
+    const events = await Event.find()
+      .sort({ date: 1 })
+      .lean();
+    
+    console.log(`Found ${events.length} events`);
+    
+    // Validate and normalize each event
+    const normalizedEvents = events.map(event => {
+      const now = new Date();
+      const eventDate = new Date(event.date);
+      
+      return {
+        ...event,
+        id: event._id,
+        // Ensure required fields have default values
+        title: event.title || 'Untitled Event',
+        description: event.description || '',
+        date: event.date ? new Date(event.date).toISOString() : now.toISOString(),
+        end_date: event.end_date ? new Date(event.end_date).toISOString() : 
+                 event.date ? new Date(event.date).toISOString() : now.toISOString(),
+        venue: event.venue || 'TBD',
+        // Set type based on date
+        type: eventDate > now ? 'upcoming' : 'past',
+        // Ensure optional fields have proper defaults
+        eventType: event.eventType === 'group' ? 'group' : 'individual',
+        fee: typeof event.fee === 'number' ? event.fee : 0,
+        maxTeamSize: event.eventType === 'group' && event.maxTeamSize ? 
+                    Number(event.maxTeamSize) : undefined,
+        thumbnail: event.thumbnail || ''
+      };
+    });
+    
+    console.log('Normalized events:', normalizedEvents.map(e => ({
+      id: e.id,
+      title: e.title,
+      date: e.date,
+      type: e.type
+    })));
+    
+    res.json(normalizedEvents);
   } catch (err) {
     console.error('Error fetching events:', err);
-    res.status(500).json({ message: 'Error fetching events' });
+    res.status(500).json({ 
+      message: 'Error fetching events',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
   }
 });
 
@@ -142,7 +186,25 @@ router.post('/:id/register', async (req, res) => {
 // Create event (Admin only)
 router.post('/', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
-    const event = await Event.create(req.body);
+    console.log('Create event with data:', req.body);
+    
+    // Validate and sanitize input data
+    const eventData = {
+      ...req.body,
+      // Ensure eventType is valid
+      eventType: req.body.eventType === 'group' ? 'group' : 'individual',
+      
+      // Ensure fee is a number
+      fee: req.body.fee !== undefined ? Number(req.body.fee) || 0 : 0,
+      
+      // Ensure maxTeamSize is a number if eventType is group
+      maxTeamSize: req.body.eventType === 'group' && req.body.maxTeamSize 
+                 ? Number(req.body.maxTeamSize) || 2 
+                 : undefined
+    };
+    
+    console.log('Sanitized event data for creation:', eventData);
+    const event = await Event.create(eventData);
     res.status(201).json(event);
   } catch (err) {
     console.error('Error creating event:', err);
@@ -153,13 +215,38 @@ router.post('/', protect, authorize('admin', 'superadmin'), async (req, res) => 
 // Update event (Admin only)
 router.put('/:id', protect, authorize('admin', 'superadmin'), async (req, res) => {
   try {
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, {
+    console.log(`Update event ${req.params.id} with data:`, req.body);
+    
+    // Validate and sanitize input data
+    const eventData = {
+      ...req.body
+    };
+    
+    // Ensure eventType is valid if provided
+    if (req.body.eventType !== undefined) {
+      eventData.eventType = req.body.eventType === 'group' ? 'group' : 'individual';
+    }
+    
+    // Ensure fee is a number if provided
+    if (req.body.fee !== undefined) {
+      eventData.fee = Number(req.body.fee) || 0;
+    }
+    
+    // Ensure maxTeamSize is a number if eventType is group
+    if (req.body.eventType === 'group' && req.body.maxTeamSize !== undefined) {
+      eventData.maxTeamSize = Number(req.body.maxTeamSize) || 2;
+    }
+    
+    console.log('Sanitized event data for update:', eventData);
+    const event = await Event.findByIdAndUpdate(req.params.id, eventData, {
       new: true,
       runValidators: true
     });
+    
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
+    
     res.json(event);
   } catch (err) {
     console.error('Error updating event:', err);

@@ -45,6 +45,27 @@ const eventSchema = new mongoose.Schema({
     enum: ['upcoming', 'past'],
     required: [true, 'Please specify event type']
   },
+  eventType: {
+    type: String,
+    enum: ['individual', 'group'],
+    default: 'individual'
+  },
+  fee: {
+    type: Number,
+    default: 0
+  },
+  maxTeamSize: {
+    type: Number,
+    default: 1
+  },
+  thumbnail: {
+    type: String,
+    default: ''
+  },
+  rulebook: {
+    type: String,
+    default: ''
+  },
   registrations: {
     type: [registrationSchema],
     default: []

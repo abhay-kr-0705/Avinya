@@ -101,11 +101,20 @@ app.use((err, req, res, next) => {
 // MongoDB connection
 async function connectDB() {
   try {
+    console.log('Attempting to connect to MongoDB with URI:', process.env.MONGODB_URI.replace(/:[^:@]*@/, ':****@'));
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
     console.log('MongoDB Connected Successfully');
+    
+    // Test the connection by trying to fetch events
+    const Event = require('./models/Event');
+    const events = await Event.find();
+    console.log(`Successfully fetched ${events.length} events from database`);
+    events.forEach(event => {
+      console.log(`Event: ${event.title}, Date: ${event.date}, Type: ${event.type}`);
+    });
   } catch (err) {
     console.error('MongoDB connection error:', err);
     process.exit(1);

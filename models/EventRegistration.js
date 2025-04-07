@@ -28,6 +28,14 @@ const eventRegistrationSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please provide your semester']
   },
+  teamName: {
+    type: String,
+    default: null
+  },
+  isLeader: {
+    type: Boolean,
+    default: false
+  },
   status: {
     type: String,
     enum: ['registered', 'attended', 'cancelled'],
@@ -38,5 +46,10 @@ const eventRegistrationSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Add indexes for better query performance
+eventRegistrationSchema.index({ event: 1, email: 1 });
+eventRegistrationSchema.index({ teamName: 1 });
+eventRegistrationSchema.index({ created_at: -1 });
 
 module.exports = mongoose.model('EventRegistration', eventRegistrationSchema);
