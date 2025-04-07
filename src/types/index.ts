@@ -59,6 +59,8 @@ export interface Event {
   start_date: string;
   end_date: string;
   location: string;
+  date: string;
+  venue: string;
   max_participants?: number;
   registration_deadline?: string;
   created_at: string;

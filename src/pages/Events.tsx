@@ -1,498 +1,638 @@
-import React, { useState, useEffect } from 'react';
-import Modal from '../components/Modal';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getEvents, getUserRegistrations, getEventById } from '../services/api';
+import { Calendar, MapPin, DollarSign, Users, User, Info, Pencil } from 'lucide-react';
+import Layout from '../components/Layout';
+import { handleError } from '../utils/errorHandling';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import { getEvents, registerForEvent, getUserRegistrations } from '../services/api';
-import toast from 'react-hot-toast';
+import Modal from '../components/Modal';
+import { toast } from 'react-hot-toast';
 
 interface Event {
   id: string;
   title: string;
   description: string;
   date: string;
-  end_date: string;
+  end_date?: string;
   venue: string;
-  type: 'upcoming' | 'past';
-  coordinators?: string[];
-  details?: string[];
+  type: 'upcoming' | 'past' | string;
+  eventType?: 'individual' | 'group' | string;
+  fee?: number;
+  maxTeamSize?: number;
+  thumbnail?: string;
+  rulebook?: string;
 }
 
 interface Registration {
-  event: string;
-  email: string;
+  id: string;
+  eventId: string;
+  userId: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
 }
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit'
-  });
-};
-
-const EventCard = ({ event, isRegistered, onRegister, onViewMore, user, delay = 0 }) => {
-  const truncateDescription = (text: string, maxLength: number = 150) => {
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength) + '...';
-  };
-
-  const getRegistrationButton = () => {
-    if (event.type !== 'upcoming') return null;
-    
-    if (isRegistered) {
-      return (
-        <div className="px-4 py-2 bg-green-100 text-green-800 rounded-md font-medium text-center">
-          Registered ✓
-        </div>
-      );
-    }
-    
-    if (!user) {
-      return (
-        <Link
-          to="/login"
-          className="px-4 py-2 bg-gray-100 text-gray-600 rounded-md font-medium text-center hover:bg-gray-200 transition-colors"
-        >
-          Login to Register
-        </Link>
-      );
-    }
-    
-    return (
-      <button
-        onClick={() => onRegister(event)}
-        className="px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors"
-      >
-        Register Now
-      </button>
-    );
-  };
-
-  return (
-    <div
-      className="bg-white rounded-lg shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="p-6">
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-xl font-semibold text-gray-900">{event.title}</h3>
-          <span
-            className={`px-2 py-1 rounded-full text-xs font-medium ${
-              event.type === 'upcoming'
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}
-          >
-            {event.type}
-          </span>
-        </div>
-        <p className="text-gray-600 mb-4">{truncateDescription(event.description)}</p>
-        <div className="text-sm text-gray-500 mb-4">
-          <p>Date: {formatDate(event.date)} - {formatDate(event.end_date)}</p>
-          <p>Venue: {event.venue}</p>
-        </div>
-        <div className="flex justify-between items-center space-x-4">
-          <button
-            onClick={() => onViewMore(event)}
-            className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded-md font-medium hover:bg-blue-50 transition-colors text-center"
-          >
-            View Details
-          </button>
-          <div className="flex-1">
-            {getRegistrationButton()}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const Events = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState('all'); // 'all', 'upcoming', 'past'
+  const navigate = useNavigate();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const { user } = useAuth();
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [isRegistrationMode, setIsRegistrationMode] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [registrationForm, setRegistrationForm] = useState({
-    name: '',
-    email: '',
-    registration_no: '',
-    mobile_no: '',
-    semester: ''
-  });
-  const [registrationError, setRegistrationError] = useState('');
-  const [registrationSuccess, setRegistrationSuccess] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [thumbnailErrors, setThumbnailErrors] = useState<Record<string, boolean>>({});
+
+  // Function to normalize event data
+  const normalizeEvent = (event: any): Event => {
+    if (!event) {
+      console.error('Received null or undefined event to normalize');
+      return null as any;
+    }
+    
+    const eventId = event.id || event._id || 'unknown';
+    
+    // Create normalized event object with defaults
+    const normalizedEvent: Event = {
+      id: event.id || event._id || '',
+      title: event.title || 'Untitled Event',
+      description: event.description || '',
+      date: event.date || new Date().toISOString(),
+      end_date: event.end_date || event.date || new Date().toISOString(),
+      venue: event.venue || 'TBD',
+      type: 'upcoming', // Will be determined below
+      eventType: 'individual', // Default value
+      fee: 0, // Default value
+      thumbnail: '' // Default value
+    };
+    
+    // Process eventType (individual/group)
+    if (event.eventType) {
+      const typeStr = String(event.eventType).toLowerCase().trim();
+      if (typeStr === 'group' || typeStr === 'team') {
+        normalizedEvent.eventType = 'group';
+      } else if (typeStr === 'individual' || typeStr === 'solo') {
+        normalizedEvent.eventType = 'individual';
+      }
+    }
+    
+    // Process fee
+    if (event.fee !== undefined && event.fee !== null) {
+      if (typeof event.fee === 'number' && !isNaN(event.fee)) {
+        normalizedEvent.fee = event.fee;
+      } else if (typeof event.fee === 'string') {
+        const parsedFee = parseFloat(event.fee.trim());
+        if (!isNaN(parsedFee)) {
+          normalizedEvent.fee = parsedFee;
+        }
+      }
+    }
+    
+    // Process thumbnail
+    if (event.thumbnail) {
+      const thumbStr = String(event.thumbnail).trim();
+      if (thumbStr.startsWith('http://') || 
+          thumbStr.startsWith('https://') || 
+          thumbStr.startsWith('data:image/')) {
+        normalizedEvent.thumbnail = thumbStr;
+      }
+    }
+    
+    // Determine if event is upcoming or past
+    const eventDate = new Date(normalizedEvent.date);
+    const now = new Date();
+    normalizedEvent.type = eventDate > now ? 'upcoming' : 'past';
+    
+    return normalizedEvent;
+  };
 
   useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setLoading(true);
+        const data = await getEvents();
+        
+        // Normalize all events before setting state
+        if (Array.isArray(data)) {
+          console.log('Normalizing events array:', data.length, 'events');
+          const normalizedEvents = data.map(normalizeEvent);
+          
+          // Sort events by date - upcoming first, then by most recent date
+          normalizedEvents.sort((a, b) => {
+            // First, sort by upcoming/past (upcoming events first)
+            if (a.type === 'upcoming' && b.type === 'past') return -1;
+            if (a.type === 'past' && b.type === 'upcoming') return 1;
+            
+            // For upcoming events, sort by closest date first
+            if (a.type === 'upcoming' && b.type === 'upcoming') {
+              return new Date(a.date).getTime() - new Date(b.date).getTime();
+            }
+            
+            // For past events, sort by most recent first
+            return new Date(b.date).getTime() - new Date(a.date).getTime();
+          });
+          
+          setEvents(normalizedEvents);
+        } else {
+          console.error('Expected array of events but got:', typeof data);
+          setEvents([]);
+        }
+        
+        // Reset thumbnail errors
+        setThumbnailErrors({});
+        
+        setError(null);
+      } catch (err) {
+        handleError(err);
+        setError('Failed to load events. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchEvents();
     if (user) {
       fetchUserRegistrations();
     }
   }, [user]);
 
-  const fetchEvents = async () => {
-    try {
-      const data = await getEvents();
-      setEvents(data);
-    } catch (error) {
-      console.error('Error fetching events:', error);
-      toast.error('Failed to fetch events');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchUserRegistrations = async () => {
-    if (!user?.email) return;
+    if (!user) return;
     try {
       const data = await getUserRegistrations(user.email);
       setRegistrations(data);
-    } catch (error) {
-      console.error('Error fetching registrations:', error);
+    } catch (err) {
+      console.error('Error fetching user registrations:', err);
     }
   };
 
-  const handleRegister = (event: Event) => {
-    if (!user) {
-      toast.error('Please login to register for events');
-      navigate('/login');
-      return;
-    }
-    setSelectedEvent(event);
-    setRegistrationForm({
-      name: user.name || '',
-      email: user.email || '',
-      registration_no: user.registration_no || '',
-      mobile_no: user.mobile || '',
-      semester: user.semester || ''
-    });
-    setIsRegistrationMode(true);
-    setShowModal(true);
-  };
-
-  const handleRegistrationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegistrationError('');
-    setRegistrationSuccess('');
-    setIsRegistering(true);
-
+  const handleViewMore = async (eventId: string) => {
     try {
-      // Validate form
-      if (!selectedEvent) {
-        throw new Error('No event selected');
+      const eventData = await getEventById(eventId);
+      if (!eventData) {
+        toast.error('Event not found');
+        return;
       }
-
-      const requiredFields = ['name', 'email', 'registration_no', 'mobile_no', 'semester'];
-      const missingFields = requiredFields.filter(field => !registrationForm[field]);
-      if (missingFields.length > 0) {
-        throw new Error(`Please fill in all required fields: ${missingFields.join(', ')}`);
-      }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(registrationForm.email)) {
-        throw new Error('Please enter a valid email address');
-      }
-
-      // Validate mobile number (10 digits)
-      const mobileRegex = /^[0-9]{10}$/;
-      if (!mobileRegex.test(registrationForm.mobile_no)) {
-        throw new Error('Please enter a valid 10-digit mobile number');
-      }
-
-      const response = await registerForEvent(selectedEvent.id, registrationForm);
-      console.log('Registration successful:', response);
       
-      setRegistrationSuccess('Successfully registered for the event!');
-      setShowModal(false);
-      setRegistrationForm({
-        name: '',
-        email: '',
-        registration_no: '',
-        mobile_no: '',
-        semester: ''
-      });
-      
-      // Refresh registrations
-      if (user?.email) {
-        const updatedRegistrations = await getUserRegistrations(user.email);
-        setRegistrations(updatedRegistrations);
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      setRegistrationError(error.response?.data?.message || error.message || 'Failed to register for event');
-    } finally {
-      setIsRegistering(false);
+      // Normalize the event data before setting state
+      const normalizedEvent = normalizeEvent(eventData);
+      setSelectedEvent(normalizedEvent);
+      setShowModal(true);
+    } catch (err) {
+      handleError(err);
+      toast.error('Failed to load event details');
     }
   };
 
-  const handleViewMore = (event: Event) => {
-    setSelectedEvent(event);
-    setIsRegistrationMode(false);
-    setShowModal(true);
+  const handleRegister = (eventId: string) => {
+    try {
+      if (!user) {
+        toast.error('Please log in to register for events');
+        navigate('/login', { state: { from: `/events/${eventId}/register` } });
+        return;
+      }
+      
+      navigate(`/events/${eventId}/register`);
+    } catch (err) {
+      handleError(err);
+      toast.error('Failed to navigate to registration page');
+    }
   };
 
-  const closeModal = () => {
-    setShowModal(false);
-    setIsRegistrationMode(false);
-    setSelectedEvent(null);
+  const filteredEvents = useMemo(() => {
+    if (filter === 'all') return events;
+    return events.filter(event => event.type === filter);
+  }, [events, filter]);
+
+  // Handle thumbnail error and retry logic
+  const handleThumbnailError = (eventId: string, thumbnailUrl?: string) => {
+    console.error(`Failed to load image for event ${eventId}: ${thumbnailUrl || 'No URL'}`);
+    setThumbnailErrors(prev => ({ ...prev, [eventId]: true }));
+    
+    // Try to load image with a different cache key
+    if (thumbnailUrl && !thumbnailUrl.includes('cache=')) {
+      const newUrl = `${thumbnailUrl}${thumbnailUrl.includes('?') ? '&' : '?'}cache=${Date.now()}`;
+      const img = new Image();
+      img.onload = () => {
+        // If successful with the new URL, clear the error
+        setThumbnailErrors(prev => ({ ...prev, [eventId]: false }));
+        
+        // Update the src attribute of the image element if it exists
+        const imgElement = document.querySelector(`img[data-event-id="${eventId}"]`) as HTMLImageElement;
+        if (imgElement) {
+          imgElement.src = newUrl;
+        }
+      };
+      img.src = newUrl;
+    }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  const upcomingEvents = events.filter(event => event.type === 'upcoming');
-  const pastEvents = events.filter(event => event.type === 'past');
-
-  const semesterOptions = Array.from({ length: 8 }, (_, i) => ({
-    value: String(i + 1),
-    label: `Semester ${i + 1}`
-  }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-indigo-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold mb-4">
-            <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-transparent bg-clip-text">
-              Events & Workshops
-            </span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Join us in our upcoming events or explore our past events. Learn, grow, and connect with fellow enthusiasts.
-          </p>
-        </div>
+    <Layout>
+      <div className="tech-background pb-16">
+        <div className="container mx-auto px-4 py-12">
+          {/* Header Section with improved styling */}
+          <div className="text-center mb-16 animate-slide-up relative">
+            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-primary-100 to-secondary-100 blur-xl rounded-3xl transform -translate-y-10"></div>
+            <h1 className="text-4xl md:text-6xl font-bold mb-5 bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-secondary-600">
+              College Events
+            </h1>
+            <div className="w-32 h-1.5 bg-gradient-to-r from-primary-500 to-secondary-500 mx-auto mb-5 rounded-full"></div>
+            <p className="text-xl text-gray-700 max-w-2xl mx-auto leading-relaxed">
+              Explore and register for exciting events hosted by Sher-Shah Engineering College
+            </p>
+          </div>
 
-        {/* Upcoming Events Section */}
-        <section className="mb-16">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold">
-              <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-                Upcoming Events
-              </span>
-            </h2>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <span className="inline-block w-3 h-3 bg-green-500 rounded-full"></span>
-              <span>Registrations Open</span>
+          {/* Filter Tabs with improved styling */}
+          <div className="mb-12 flex justify-center animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <div className="inline-flex bg-white/90 shadow-lg p-1.5 rounded-xl backdrop-blur-lg border border-gray-200/50">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  filter === 'all'
+                  ? 'bg-gradient-to-r from-primary-500 to-secondary-500 text-white shadow-md'
+                  : 'text-gray-600 hover:text-primary-600 hover:bg-gray-100/50'
+                }`}
+              >
+                All Events
+              </button>
+              <button
+                onClick={() => setFilter('upcoming')}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  filter === 'upcoming'
+                  ? 'bg-gradient-to-r from-primary-500 to-secondary-500 text-white shadow-md'
+                  : 'text-gray-600 hover:text-primary-600 hover:bg-gray-100/50'
+                }`}
+              >
+                Upcoming
+              </button>
+              <button
+                onClick={() => setFilter('past')}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  filter === 'past'
+                  ? 'bg-gradient-to-r from-primary-500 to-secondary-500 text-white shadow-md'
+                  : 'text-gray-600 hover:text-primary-600 hover:bg-gray-100/50'
+                }`}
+              >
+                Past Events
+              </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {upcomingEvents.map((event, index) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                isRegistered={registrations.some(reg => reg.event === event.id)}
-                onRegister={handleRegister}
-                onViewMore={handleViewMore}
-                user={user}
-                delay={index * 100}
-              />
-            ))}
-            {upcomingEvents.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-500">
-                <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+          {/* Loading, Error and Empty States */}
+          {loading ? (
+            <div className="flex flex-col justify-center items-center py-20">
+              <div className="w-16 h-16 relative">
+                <div className="w-16 h-16 rounded-full border-4 border-primary-400/20 border-t-primary-400 animate-spin"></div>
+                <div className="w-16 h-16 rounded-full border-4 border-secondary-400/10 border-b-secondary-400 animate-spin absolute inset-0" style={{animationDuration: '1.5s'}}></div>
+              </div>
+              <p className="mt-4 text-gray-500">Loading events...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-16 glass-card max-w-md mx-auto">
+              <div className="text-red-500 flex flex-col items-center mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p className="text-lg font-medium">{error}</p>
+              </div>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-6 py-2.5 primary-button"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : filteredEvents.length === 0 ? (
+            <div className="text-center py-20 glass-card max-w-xl mx-auto relative overflow-hidden">
+              <div className="absolute inset-0 -z-10 bg-gradient-to-r from-primary-50 to-secondary-50"></div>
+              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-xl font-medium">No upcoming events at the moment</p>
-                <p className="mt-2">Check back later for new events!</p>
               </div>
-            )}
-          </div>
-        </section>
-
-        {/* Past Events Section */}
-        <section>
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold">
-              <span className="bg-gradient-to-r from-purple-600 to-indigo-600 text-transparent bg-clip-text">
-                Past Events
-              </span>
-            </h2>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <span className="inline-block w-3 h-3 bg-gray-400 rounded-full"></span>
-              <span>Completed</span>
+              <h3 className="text-2xl font-medium text-gradient mb-4">No events found</h3>
+              <p className="text-gray-500 max-w-md mx-auto mb-6">
+                {filter === 'upcoming' 
+                  ? 'There are no upcoming events at the moment. Please check back later.' 
+                  : filter === 'past' 
+                    ? 'There are no past events to display.' 
+                    : 'No events are available.'}
+              </p>
+              <button 
+                onClick={() => setFilter('all')} 
+                className="px-6 py-2.5 inline-flex secondary-button mx-auto"
+              >
+                View All Events
+              </button>
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {pastEvents.map((event, index) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                isRegistered={false}
-                onRegister={() => {}}
-                onViewMore={handleViewMore}
-                user={user}
-                delay={index * 100}
-              />
-            ))}
-            {pastEvents.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-500">
-                <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-xl font-medium">No past events to show</p>
-                <p className="mt-2">Stay tuned for our upcoming events!</p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Modal */}
-        {showModal && selectedEvent && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {isRegistrationMode ? 'Register for Event' : 'Event Details'}
-                </h3>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-500"
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {filteredEvents.map((event, index) => (
+                <div 
+                  key={event.id}
+                  className="glass-card overflow-hidden transition-all duration-300 transform hover:-translate-y-2 hover:shadow-xl animate-slide-up"
+                  style={{ animationDelay: `${0.1 + index * 0.05}s` }}
                 >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                  {/* Event image with proper fallback */}
+                  <div className="h-64 overflow-hidden relative bg-gradient-to-r from-primary-100 to-secondary-100 flex items-center justify-center">
+                    {event.thumbnail ? (
+                      <img
+                        src={event.thumbnail}
+                        alt={event.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          console.log(`Thumbnail for event ${event.id} failed to load:`, event.thumbnail);
+                          // Set error state for this thumbnail
+                          setThumbnailErrors(prev => ({
+                            ...prev,
+                            [event.id]: true
+                          }));
+                          
+                          // Try to load with cache busting
+                          if (event.thumbnail && !event.thumbnail.includes('cache=')) {
+                            const newSrc = `${event.thumbnail}${event.thumbnail.includes('?') ? '&' : '?'}cache=${Date.now()}`;
+                            console.log(`Trying cache-busting URL for event ${event.id}:`, newSrc);
+                            
+                            const newImg = new Image();
+                            newImg.onload = () => {
+                              console.log(`Cache-busting worked for event ${event.id}`);
+                              // If successful, update the image src
+                              const target = e.target as HTMLImageElement;
+                              if (target) target.src = newSrc;
+                              // Clear the error state
+                              setThumbnailErrors(prev => ({
+                                ...prev,
+                                [event.id]: false
+                              }));
+                            };
+                            newImg.src = newSrc;
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-gray-400 h-full w-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-sm">No image available</span>
+                      </div>
+                    )}
+                    
+                    {/* Gradient overlay */}
+                    <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-gray-900/70 to-transparent">
+                      <div className="absolute bottom-4 left-4 text-white">
+                        <div className="flex items-center">
+                          <Calendar className="h-5 w-5 mr-2" />
+                          <span className="font-medium">
+                            {new Date(event.date).toLocaleDateString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6">
+                    {/* Event Badges with correct display for event type */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center
+                        ${event.eventType === 'group' || event.eventType === 'team'
+                          ? 'bg-secondary-100 text-secondary-600' 
+                          : 'bg-primary-100 text-primary-600'}`}
+                      >
+                        {event.eventType === 'group' || event.eventType === 'team' ? (
+                          <>
+                            <Users className="w-3 h-3 mr-1" />
+                            <span>Group</span>
+                          </>
+                        ) : (
+                          <>
+                            <User className="w-3 h-3 mr-1" />
+                            <span>Individual</span>
+                          </>
+                        )}
+                      </div>
+                      
+                      {/* Fee badge with correct display */}
+                      <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center
+                        ${typeof event.fee === 'number' && event.fee > 0 
+                          ? 'bg-amber-100 text-amber-600' 
+                          : 'bg-green-100 text-green-600'}`}
+                      >
+                        <DollarSign className="w-3 h-3 mr-1" />
+                        {typeof event.fee === 'number' && event.fee > 0 ? 'Paid' : 'Free'}
+                      </div>
+                    </div>
+                    
+                    <h3 className="text-xl font-bold mb-3 text-gray-800 hover:text-primary-600 transition-colors line-clamp-1">{event.title}</h3>
+                    
+                    <p className="text-gray-600 text-sm mb-5 line-clamp-2">
+                      {event.description}
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-3 mb-5 text-sm">
+                      <div className="flex items-center text-gray-600">
+                        <Calendar className="w-4 h-4 mr-2 text-primary-500" />
+                        <span>
+                          {new Date(event.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center text-gray-600">
+                        <MapPin className="w-4 h-4 mr-2 text-primary-500" />
+                        <span className="truncate">{event.venue}</span>
+                      </div>
+                    
+                      <div className="flex items-center col-span-2">
+                        <DollarSign className="w-4 h-4 mr-2 text-primary-500" />
+                        {typeof event.fee === 'number' && event.fee > 0 ? (
+                          <span className="text-gray-600">
+                            ₹{event.fee} {event.eventType === 'group' || event.eventType === 'team' ? 'per team' : 'per person'}
+                          </span>
+                        ) : (
+                          <span className="text-green-600 font-medium">Free Event</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleViewMore(event.id)}
+                        className="secondary-button flex-1 flex items-center justify-center"
+                      >
+                        <Info className="w-4 h-4 mr-1.5" />
+                        View Details
+                      </button>
+                      
+                      {event.type === 'upcoming' && (
+                        <>
+                          {registrations.some(reg => reg.eventId === event.id) ? (
+                            <div className="flex-1 flex items-center justify-center gap-2 text-green-600 font-medium">
+                              <span>Registered</span>
+                              <button
+                                onClick={() => navigate(`/events/${event.id}/register`)}
+                                className="text-primary-600 hover:text-primary-700 transition-colors"
+                                title="Edit Registration"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleRegister(event.id)}
+                              className="primary-button flex-1"
+                            >
+                              Register Now
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Event Details Modal with improved styling */}
+        {selectedEvent && showModal && (
+          <Modal
+            isOpen={showModal}
+            onClose={() => setShowModal(false)}
+            title={selectedEvent.title}
+            size="lg"
+          >
+            <div className="space-y-6">
+              {/* Event Image with improved error handling */}
+              <div className="glass-card rounded-lg overflow-hidden h-96 relative bg-gradient-to-r from-primary-100 to-secondary-100 flex items-center justify-center">
+                {selectedEvent.thumbnail && !thumbnailErrors[selectedEvent.id] ? (
+                  <img
+                    src={`${selectedEvent.thumbnail}`}
+                    data-event-id={selectedEvent.id}
+                    alt={selectedEvent.title}
+                    onError={() => handleThumbnailError(selectedEvent.id, selectedEvent.thumbnail)}
+                    className="w-full h-full object-cover transition-transform duration-500"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full w-full">
+                    <div className="text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-500 to-secondary-500 mb-2">
+                      {selectedEvent.title.charAt(0)}
+                    </div>
+                    <p className="text-sm text-gray-500">Event thumbnail not available</p>
+                  </div>
+                )}
               </div>
 
-              {isRegistrationMode ? (
-                <form onSubmit={handleRegistrationSubmit} className="space-y-4">
-                  {registrationError && (
-                    <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm">
-                      {registrationError}
-                    </div>
-                  )}
-                  {registrationSuccess && (
-                    <div className="bg-green-50 text-green-500 p-3 rounded-md text-sm">
-                      {registrationSuccess}
-                    </div>
-                  )}
-                  
+              {/* Event Info Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="glass-card p-5 flex items-start rounded-lg transition-all duration-300 hover:shadow-lg">
+                  <Calendar className="h-6 w-6 mr-3 text-primary-500 flex-shrink-0 mt-0.5" />
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={registrationForm.name}
-                      onChange={(e) => setRegistrationForm(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      value={registrationForm.email}
-                      onChange={(e) => setRegistrationForm(prev => ({ ...prev, email: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Registration Number *
-                    </label>
-                    <input
-                      type="text"
-                      value={registrationForm.registration_no}
-                      onChange={(e) => setRegistrationForm(prev => ({ ...prev, registration_no: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mobile Number *
-                    </label>
-                    <input
-                      type="tel"
-                      value={registrationForm.mobile_no}
-                      onChange={(e) => setRegistrationForm(prev => ({ ...prev, mobile_no: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      required
-                      pattern="[0-9]{10}"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Semester *
-                    </label>
-                    <select
-                      value={registrationForm.semester}
-                      onChange={(e) => setRegistrationForm(prev => ({ ...prev, semester: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">Select Semester</option>
-                      {semesterOptions.map(option => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex justify-end space-x-3 mt-6">
-                    <button
-                      type="button"
-                      onClick={() => setShowModal(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isRegistering}
-                      className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                        isRegistering ? 'opacity-75 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      {isRegistering ? 'Registering...' : 'Register'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  <h4 className="text-lg font-semibold">{selectedEvent.title}</h4>
-                  <p className="text-gray-600">{selectedEvent.description}</p>
-                  <div className="flex flex-col space-y-2">
-                    <p className="text-sm text-gray-500">
-                      <span className="font-medium">Date:</span>{' '}
-                      {formatDate(selectedEvent.date)}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      <span className="font-medium">End Date:</span>{' '}
-                      {formatDate(selectedEvent.end_date)}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      <span className="font-medium">Venue:</span> {selectedEvent.venue}
+                    <h3 className="text-sm font-semibold text-primary-600 mb-2">Date</h3>
+                    <p className="text-gray-600">
+                      {new Date(selectedEvent.date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
                     </p>
                   </div>
                 </div>
-              )}
+
+                <div className="glass-card p-5 flex items-start rounded-lg transition-all duration-300 hover:shadow-lg">
+                  <MapPin className="h-6 w-6 mr-3 text-primary-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary-600 mb-2">Venue</h3>
+                    <p className="text-gray-600">{selectedEvent.venue}</p>
+                  </div>
+                </div>
+
+                <div className="glass-card p-5 flex items-start rounded-lg transition-all duration-300 hover:shadow-lg">
+                  {selectedEvent.eventType === 'group' ? (
+                    <Users className="h-6 w-6 mr-3 text-secondary-500 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <User className="h-6 w-6 mr-3 text-primary-500 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary-600 mb-2">Event Type</h3>
+                    <p className={`font-medium ${selectedEvent.eventType === 'group' ? 'text-secondary-600' : 'text-primary-600'}`}>
+                      {selectedEvent.eventType === 'group' ? 'Group Event' : 'Individual Event'}
+                    </p>
+                    {selectedEvent.eventType === 'group' && selectedEvent.maxTeamSize && (
+                      <p className="text-gray-500 mt-1 text-sm">Max team size: {selectedEvent.maxTeamSize}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="glass-card p-5 flex items-start rounded-lg transition-all duration-300 hover:shadow-lg">
+                  <DollarSign className="h-6 w-6 mr-3 text-primary-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary-600 mb-2">Registration Fee</h3>
+                    {typeof selectedEvent.fee === 'number' && selectedEvent.fee > 0 ? (
+                      <p className="text-amber-600 font-medium">
+                        ₹{selectedEvent.fee} {selectedEvent.eventType === 'group' ? 'per team' : 'per person'}
+                      </p>
+                    ) : (
+                      <p className="text-green-600 font-medium">Free Event</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Description with improved styling */}
+              <div className="glass-card p-5 rounded-lg">
+                <h3 className="text-lg font-semibold text-primary-600 mb-3">About the Event</h3>
+                <p className="text-gray-600 whitespace-pre-wrap">{selectedEvent.description}</p>
+              </div>
+
+              {/* Registration Status and Actions */}
+              <div className="flex justify-end gap-3">
+                {selectedEvent.type === 'upcoming' && (
+                  <>
+                    {registrations.some(reg => reg.eventId === selectedEvent.id) ? (
+                      <div className="flex items-center gap-2 text-green-600 font-medium">
+                        <span>Registered</span>
+                        <button
+                          onClick={() => {
+                            setShowModal(false);
+                            navigate(`/events/${selectedEvent.id}/register`);
+                          }}
+                          className="text-primary-600 hover:text-primary-700 transition-colors"
+                          title="Edit Registration"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setShowModal(false);
+                          handleRegister(selectedEvent.id);
+                        }}
+                        className="primary-button"
+                      >
+                        Register Now
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          </Modal>
         )}
       </div>
-    </div>
+    </Layout>
   );
 };
 

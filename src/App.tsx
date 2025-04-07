@@ -1,74 +1,64 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './routes/AdminRoute';
 import Navbar from './components/Navbar';
+
+// Pages
 import Home from './pages/Home';
-import About from './pages/About';
 import Events from './pages/Events';
 import EventRegistration from './pages/EventRegistration';
-import EventDetails from './pages/admin/EventDetails';
-import Team from './pages/Team';
+import Resources from './pages/Resources';
 import Gallery from './pages/Gallery';
 import GalleryView from './pages/GalleryView';
+import Leaderboard from './pages/Leaderboard';
 import Contact from './pages/Contact';
+import About from './pages/About';
+import Team from './pages/Team';
+
+// Auth Pages
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import Resources from './pages/Resources';
-import UserProfile from './components/UserProfile';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
+
+// Admin Pages
 import Dashboard from './pages/admin/Dashboard';
 import ManageEvents from './pages/admin/ManageEvents';
 import ManageGallery from './pages/admin/ManageGallery';
 import ManageResources from './pages/admin/ManageResources';
-import UserList from './pages/admin/UserList';
-import ProtectedRoute from './components/ProtectedRoute';
-import Footer from './components/Footer';
+import EventRegistrations from './pages/admin/EventRegistrations';
+import ManageLeaderboard from './pages/admin/ManageLeaderboard';
+
+// User Pages
+import UserProfile from './components/UserProfile';
+import UserRegistrations from './pages/user/Registrations';
+
+// Auth Context Provider
+import { AuthProvider } from './contexts/AuthContext';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-gray-100 flex flex-col">
+        <div className="flex flex-col min-h-screen tech-background">
+          <Toaster position="top-right" />
           <Navbar />
-          <div className="flex-grow pt-16">
+          <main className="flex-grow">
             <Routes>
+              {/* Public Routes */}
               <Route path="/" element={<Home />} />
-              <Route path="/about" element={<About />} />
               <Route path="/events" element={<Events />} />
-              <Route 
-                path="/events/:eventId/register" 
-                element={
-                  <ProtectedRoute>
-                    <EventRegistration />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route path="/team" element={<Team />} />
-              <Route 
-                path="/gallery" 
-                element={
-                  <ProtectedRoute>
-                    <Gallery />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/gallery/:galleryId" 
-                element={
-                  <ProtectedRoute>
-                    <GalleryView />
-                  </ProtectedRoute>
-                } 
-              />
+              <Route path="/resources" element={<Resources />} />
+              <Route path="/gallery" element={<Gallery />} />
+              <Route path="/gallery/:galleryId" element={<GalleryView />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/contact" element={<Contact />} />
-              <Route 
-                path="/resources" 
-                element={
-                  <ProtectedRoute>
-                    <Resources />
-                  </ProtectedRoute>
-                } 
-              />
+              <Route path="/about" element={<About />} />
+              <Route path="/team" element={<Team />} />
+              
+              {/* Auth Routes */}
               <Route 
                 path="/login" 
                 element={
@@ -85,6 +75,10 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
+              
+              {/* Protected Routes */}
               <Route 
                 path="/profile" 
                 element={
@@ -93,30 +87,35 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
-              
-              {/* Admin routes */}
               <Route 
-                path="/admin/*" 
+                path="/my-registrations" 
                 element={
-                  <ProtectedRoute requireAuth requireAdmin>
-                    <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="events" element={<ManageEvents />} />
-                      <Route path="events/:eventId" element={<EventDetails />} />
-                      <Route path="gallery" element={<ManageGallery />} />
-                      <Route path="resources" element={<ManageResources />} />
-                      <Route path="users" element={<UserList />} />
-                    </Routes>
+                  <ProtectedRoute>
+                    <UserRegistrations />
                   </ProtectedRoute>
                 } 
               />
+              <Route 
+                path="/events/:eventId/register" 
+                element={
+                  <ProtectedRoute>
+                    <EventRegistration />
+                  </ProtectedRoute>
+                } 
+              />
+
+              {/* Admin Routes */}
+              <Route path="/admin" element={<AdminRoute element={<Dashboard />} />} />
+              <Route path="/admin/events" element={<AdminRoute element={<ManageEvents />} />} />
+              <Route path="/admin/events/:eventId" element={<AdminRoute element={<EventRegistrations />} />} />
+              <Route path="/admin/resources" element={<AdminRoute element={<ManageResources />} />} />
+              <Route path="/admin/gallery" element={<AdminRoute element={<ManageGallery />} />} />
+              <Route path="/admin/leaderboard" element={<AdminRoute element={<ManageLeaderboard />} />} />
               
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </div>
-          <Footer />
-          <Toaster position="top-right" />
+          </main>
         </div>
       </Router>
     </AuthProvider>

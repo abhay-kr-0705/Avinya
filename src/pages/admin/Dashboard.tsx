@@ -4,42 +4,50 @@ import { FaUsers, FaCalendarAlt, FaImages, FaBook } from 'react-icons/fa';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 import { getAllUsers, getAllEventsWithRegistrations, createEvent } from '../../services/adminApi';
-import { Card, Row, Col } from 'antd';
+import { Card, Row, Col, Title, Text, Statistic, Table, Tag, Input } from 'antd';
 import {
   CalendarOutlined,
   FileOutlined,
   PictureOutlined,
   UserOutlined,
   LineChartOutlined,
-  TeamOutlined
+  TeamOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
+import { handleError } from '../../utils/errorHandling';
 
 interface DashboardStats {
-  totalMembers: number;
+  totalUsers: number;
   totalEvents: number;
+  totalRegistrations: number;
   upcomingEvents: number;
 }
 
 interface User {
-  _id: string;
+  id: string;
   name: string;
   email: string;
   role: string;
-  registration_no: string;
-  branch: string;
-  semester: string;
-  mobile: string;
   created_at: string;
-  last_login?: string;
+  registration_no?: string;
+  branch?: string;
+  semester?: string;
+  mobile?: string;
 }
 
-interface Event {
-  _id: string;
-  name: string;
+interface AdminEvent {
+  id: string;
+  title: string;
   description: string;
-  start_date: string;
+  date: string;
   end_date: string;
   venue: string;
+  type: 'upcoming' | 'past';
+  registrations: any[];
+  eventType?: 'individual' | 'group';
+  fee?: number;
+  maxTeamSize?: number;
+  thumbnail?: string;
 }
 
 const INITIAL_USERS_TO_SHOW = 7;
@@ -47,12 +55,13 @@ const USERS_PER_LOAD = 5;
 
 const Dashboard = () => {
   const [stats, setStats] = useState<DashboardStats>({
-    totalMembers: 0,
+    totalUsers: 0,
     totalEvents: 0,
+    totalRegistrations: 0,
     upcomingEvents: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<AdminEvent[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleUsers, setVisibleUsers] = useState(INITIAL_USERS_TO_SHOW);
@@ -111,12 +120,13 @@ const Dashboard = () => {
       setUsers(usersData);
 
       const upcomingEvents = eventsData.filter(event => 
-        new Date(event.start_date) > new Date()
+        new Date(event.date) > new Date()
       ).length;
 
       setStats({
-        totalMembers: usersData.length,
+        totalUsers: usersData.length,
         totalEvents: eventsData.length,
+        totalRegistrations: eventsData.reduce((total, event) => total + event.registrations.length, 0),
         upcomingEvents,
       });
     } catch (error) {
@@ -132,7 +142,8 @@ const Dashboard = () => {
       const searchLower = searchQuery.toLowerCase();
       return (
         user.name.toLowerCase().includes(searchLower) ||
-        user.registration_no.toLowerCase().includes(searchLower)
+        user.registration_no?.toLowerCase().includes(searchLower) ||
+        user.email.toLowerCase().includes(searchLower)
       );
     });
 
@@ -152,7 +163,7 @@ const Dashboard = () => {
   }, [filteredAndSortedUsers, visibleUsers]);
 
   const pastEvents = useMemo(() => {
-    return events.filter(event => new Date(event.start_date) < new Date());
+    return events.filter(event => new Date(event.date) < new Date());
   }, [events]);
 
   const handleUserClick = (userId: string) => {
@@ -204,7 +215,7 @@ const Dashboard = () => {
 
         {/* Management Section */}
         <div className="mb-12">
-          <Row gutter={[16, 16]}>
+          <Row gutter={16}>
             <Col xs={24} sm={12} lg={6}>
               <Link to="/admin/events">
                 <Card 
@@ -250,6 +261,23 @@ const Dashboard = () => {
               </Link>
             </Col>
 
+            <Col xs={24} sm={12} lg={8} className="mb-4">
+              <Link to="/admin/leaderboard">
+                <Card 
+                  hoverable 
+                  className="h-full glass-card border-primary-600 transition-all duration-300 hover:border-primary-400 hover:shadow-lg"
+                >
+                  <div className="text-center">
+                    <div className="flex justify-center mb-3">
+                      <LineChartOutlined className="text-3xl text-primary-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2">Manage Leaderboard</h3>
+                    <p className="text-gray-400">Update scores and participants</p>
+                  </div>
+                </Card>
+              </Link>
+            </Col>
+
             <Col xs={24} sm={12} lg={6}>
               <Link to="/admin/users">
                 <Card 
@@ -275,19 +303,18 @@ const Dashboard = () => {
                 <FaUsers className="w-8 h-8 text-blue-500 mr-4" />
                 <div>
                   <p className="text-gray-600">Total Members</p>
-                  <p className="text-2xl font-bold">{stats.totalMembers}</p>
+                  <p className="text-2xl font-bold">{stats.totalUsers}</p>
                 </div>
               </div>
 
               <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search by name or reg. no"
+                <Input
+                  placeholder="Search by name, email, or reg. no"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
+                  prefix={<SearchOutlined className="text-gray-400" />}
+                  className="w-64"
                 />
-                <FaUsers className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
               </div>
             </div>
 
@@ -309,9 +336,9 @@ const Dashboard = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {visibleUsersList.map((user, index) => (
                       <tr 
-                        key={user._id} 
+                        key={user.id} 
                         className="hover:bg-gray-50 cursor-pointer" 
-                        onClick={() => handleUserClick(user._id)}
+                        onClick={() => handleUserClick(user.id)}
                         ref={index === visibleUsersList.length - 1 ? lastUserElementRef : null}
                       >
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>

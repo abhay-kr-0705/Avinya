@@ -1,15 +1,27 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { login as apiLogin, register as apiRegister, getCurrentUser, logout as apiLogout } from '../services/api';
-import { getAuthToken, setAuthToken, clearAuth, User, setUser, getUser } from '../utils/localStorage';
+import { getAuthToken, setAuthToken, clearAuth, setUser as setLocalUser, getUser as getLocalUser } from '../utils/localStorage';
 import { handleError } from '../utils/errorHandling';
 import { toast } from 'react-toastify'; // Assuming you have react-toastify installed
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  registration_no?: string;
+  mobile?: string;
+  semester?: string;
+  branch?: string;
+  college?: string;
+}
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, registration_no: string, branch: string, semester: string, mobile: string) => Promise<void>;
+  register: (email: string, password: string, name: string, registration_no: string, branch: string, semester: string, mobile: string, college?: string) => Promise<void>;
   signOut: () => Promise<{ success: boolean }>;
   updateProfile: (data: Partial<User>) => Promise<void>;
 }
@@ -17,7 +29,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUserState] = useState<User | null>(getUser());
+  const [user, setUserState] = useState<User | null>(getLocalUser());
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -27,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (token) {
           const userData = await getCurrentUser();
           setUserState(userData);
-          setUser(userData);
+          setLocalUser(userData);
         }
       } catch (error) {
         handleError(error, 'Session expired');
@@ -47,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (response.success && response.token && response.user) {
         setAuthToken(response.token);
         setUserState(response.user);
-        setUser(response.user);
+        setLocalUser(response.user);
       } else {
         throw new Error('Invalid login response');
       }
@@ -57,9 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const handleRegister = async (email: string, password: string, name: string, registration_no: string, branch: string, semester: string, mobile: string) => {
+  const handleRegister = async (email: string, password: string, name: string, registration_no: string, branch: string, semester: string, mobile: string, college?: string) => {
     try {
-      const { data } = await apiRegister(email, password, name, registration_no, branch, semester, mobile);
+      const { data } = await apiRegister(email, password, name, registration_no, branch, semester, mobile, college);
       toast.success('Registration successful! Please login.');
     } catch (error) {
       handleError(error, 'Registration failed');
@@ -99,12 +111,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const updatedUserData = await response.json();
       setUserState(updatedUserData);
-      setUser(updatedUserData);
+      setLocalUser(updatedUserData);
       
       // Refresh user data from server
       const refreshedUser = await getCurrentUser();
       setUserState(refreshedUser);
-      setUser(refreshedUser);
+      setLocalUser(refreshedUser);
     } catch (error) {
       handleError(error, 'Profile update failed');
       throw error;

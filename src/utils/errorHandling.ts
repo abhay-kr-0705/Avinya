@@ -32,26 +32,9 @@ export function getErrorMessage(error: unknown): string {
   return 'An unexpected error occurred.';
 }
 
-export const handleError = (error: any, defaultMessage: string = 'Something went wrong') => {
-  console.error('Error:', error);
-
-  let message = defaultMessage;
-
-  if (axios.isAxiosError(error)) {
-    // Handle Axios errors
-    if (error.response) {
-      // Server responded with error status
-      message = error.response.data.message || defaultMessage;
-    } else if (error.request) {
-      // Request was made but no response received
-      message = 'No response from server. Please try again.';
-    }
-  } else if (error instanceof Error) {
-    // Handle standard JavaScript errors
-    message = error.message;
-  }
-
-  // Show error toast notification
+export const handleError = (error: any, customMessage?: string) => {
+  console.error(error);
+  const message = customMessage || 'An error occurred';
   toast.error(message);
 };
 

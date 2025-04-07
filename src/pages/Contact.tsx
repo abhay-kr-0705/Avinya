@@ -100,6 +100,23 @@ const Contact = () => {
                 </a>
               </div>
             </div>
+            
+            <div className="mt-8">
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">Find Us</h3>
+              <div className="w-full rounded-lg overflow-hidden shadow-md">
+                <iframe 
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d25696.34787077699!2d83.95706153242958!3d25.058286673527476!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x398dadbac7c73027%3A0x3bc4c5745ba8e914!2sSershah%20Engineering%20College%2C%20Sasaram!5e0!3m2!1sen!2sin!4v1743461712582!5m2!1sen!2sin" 
+                  width="100%" 
+                  height="300" 
+                  style={{ border: 0 }} 
+                  allowFullScreen 
+                  loading="lazy" 
+                  referrerPolicy="no-referrer-when-downgrade"
+                  title="Sershah Engineering College, Sasaram"
+                  className="rounded-lg"
+                ></iframe>
+              </div>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 p-8">

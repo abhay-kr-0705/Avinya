@@ -208,169 +208,160 @@ const domainCoLeads: TeamMember[] = [
   }
 ];
 
-const TeamMemberCard: React.FC<{ member: TeamMember }> = ({ member }) => (
-  <div className="group relative overflow-hidden rounded-xl bg-white shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl h-full flex flex-col">
-    <div className="aspect-square overflow-hidden flex-shrink-0">
-      <img
-        src={member.image}
-        alt={member.name}
-        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-      />
-    </div>
-    <div className="p-4 text-center bg-white flex-grow flex flex-col justify-between">
-      <div>
-        <h3 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-blue-600 transition-colors duration-300">
-          {member.name}
-        </h3>
-        <p className="text-sm text-gray-600 mb-3 font-medium">{member.role}</p>
+const TeamMemberCard = ({ member }: { member: TeamMember }) => {
+  return (
+    <div className="relative group">
+      <div className="overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-xl bg-gradient-to-b from-dark-800 to-dark-900 border border-dark-700 group-hover:border-primary-500/30 h-full">
+        <div className="relative h-64 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-transparent to-transparent z-10"></div>
+          <img 
+            src={member.image} 
+            alt={member.name} 
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(e) => {
+              e.currentTarget.src = blank;
+            }}
+          />
+          
+          <div className="absolute inset-0 flex items-center justify-center bg-dark-900/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+            <div className="flex space-x-4">
+              {member.linkedin && (
+                <a href={member.linkedin} target="_blank" rel="noopener noreferrer" className="text-white bg-[#0A66C2] p-2 rounded-full hover:bg-opacity-90 transition-all">
+                  <FaLinkedin className="w-5 h-5" />
+                </a>
+              )}
+              {member.github && (
+                <a href={member.github} target="_blank" rel="noopener noreferrer" className="text-white bg-[#333] p-2 rounded-full hover:bg-opacity-90 transition-all">
+                  <FaGithub className="w-5 h-5" />
+                </a>
+              )}
+              {member.email && (
+                <a href={`mailto:${member.email}`} className="text-white bg-primary-600 p-2 rounded-full hover:bg-opacity-90 transition-all">
+                  <FaEnvelope className="w-5 h-5" />
+                </a>
+              )}
+              {member.instagram && (
+                <a href={member.instagram} target="_blank" rel="noopener noreferrer" className="text-white bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#FCAF45] p-2 rounded-full hover:bg-opacity-90 transition-all">
+                  <Instagram className="w-5 h-5" />
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-5">
+          <h3 className="text-lg font-bold text-white mb-1 group-hover:text-primary-400 transition-colors">
+            {member.name}
+          </h3>
+          <p className="text-sm font-medium text-primary-400 mb-3">
+            {member.role}
+          </p>
+          
+          <div className="flex space-x-2 md:hidden mt-2">
+            {member.linkedin && (
+              <a href={member.linkedin} target="_blank" rel="noopener noreferrer" className="text-white hover:text-[#0A66C2] transition-colors">
+                <FaLinkedin className="w-4 h-4" />
+              </a>
+            )}
+            {member.github && (
+              <a href={member.github} target="_blank" rel="noopener noreferrer" className="text-white hover:text-gray-300 transition-colors">
+                <FaGithub className="w-4 h-4" />
+              </a>
+            )}
+            {member.email && (
+              <a href={`mailto:${member.email}`} className="text-white hover:text-primary-400 transition-colors">
+                <FaEnvelope className="w-4 h-4" />
+              </a>
+            )}
+            {member.instagram && (
+              <a href={member.instagram} target="_blank" rel="noopener noreferrer" className="text-white hover:text-pink-400 transition-colors">
+                <Instagram className="w-4 h-4" />
+              </a>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="flex justify-center space-x-7 pt-2 border-t border-gray-100">
-        {member.linkedin && (
-          <a
-            href={member.linkedin}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transform hover:scale-110 transition-transform duration-200"
-          >
-            <Linkedin className="h-5 w-5 text-gray-600 hover:text-blue-600" />
-          </a>
-        )}
-        {member.github && (
-          <a
-            href={member.github}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transform hover:scale-110 transition-transform duration-200"
-          >
-            <FaGithub className="h-5 w-5 text-gray-600 hover:text-gray-800" />
-          </a>
-        )}
-        {member.instagram && (
-          <a
-            href={member.instagram}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transform hover:scale-110 transition-transform duration-200"
-          >
-            <Instagram className="h-5 w-5 text-gray-600 hover:text-pink-600" />
-          </a>
-        )}
-        {member.email && (
-          <a
-            href={`mailto:${member.email}`}
-            className="transform hover:scale-110 transition-transform duration-200"
-          >
-            <Mail className="h-5 w-5 text-gray-600 hover:text-red-600" />
-          </a>
-        )}
-      </div>
     </div>
-  </div>
-);
+  );
+};
 
-const SectionTitle: React.FC<{ title: string }> = ({ title }) => (
-  <h2 className="text-3xl font-bold text-center mb-12">
-    <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-      {title}
-    </span>
-  </h2>
-);
+const SectionTitle = ({ title }: { title: string }) => {
+  return (
+    <div className="mb-12 relative">
+      <h2 className="text-2xl md:text-3xl font-bold text-white text-center relative z-10">
+        <span className="relative">
+          {title}
+          <span className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full"></span>
+        </span>
+      </h2>
+    </div>
+  );
+};
 
 const Team = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-indigo-50 py-20">
-      <div className="container mx-auto px-4">
-        {/* Hero Section */}
-        <div className="text-center mb-20 animate-fadeIn">
-          <h1 className="text-5xl font-black mb-4">
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-              Meet Our Team
-            </span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            We are a passionate team of developers dedicated to creating innovative solutions and fostering a community of tech enthusiasts.
-          </p>
+    <div className="min-h-screen pt-20 bg-gradient-to-b from-dark-950 to-dark-900">
+      <div className="relative overflow-hidden py-16 md:py-24">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-600/10 to-secondary-600/10" />
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-primary-500/10 rounded-full filter blur-3xl opacity-30"></div>
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-secondary-500/10 rounded-full filter blur-3xl opacity-30"></div>
         </div>
+        
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="text-center max-w-4xl mx-auto">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-secondary-400 leading-tight">
+              Our Core Team
+            </h1>
+            <p className="text-lg md:text-xl text-gray-300 leading-relaxed mb-8">
+              Meet the innovative minds behind Avinya - individuals who are passionate about technology and committed to creating an exceptional technical fest experience.
+            </p>
+            <div className="w-24 h-1 bg-gradient-to-r from-primary-500 to-secondary-500 mx-auto rounded-full" />
+          </div>
+        </div>
+      </div>
 
-        {/* Mentor & Founder Section */}
+      <div className="container mx-auto px-4 py-16">
         <div className="mb-24">
-          <SectionTitle title="Club Mentorship" />
-          <div className="flex flex-col sm:flex-row justify-center gap-6 lg:gap-8 max-w-7xl mx-auto">
-            {principal && (
-              <div className="w-full sm:w-1/3 lg:w-1/4 animate-fadeIn">
-                <TeamMemberCard member={principal} />
-              </div>
-            )}
-            {mentor && (
-              <div className="w-full sm:w-1/3 lg:w-1/4 animate-fadeIn">
-                <TeamMemberCard member={mentor} />
-              </div>
-            )}
-            {founder && (
-              <div className="w-full sm:w-1/3 lg:w-1/4 animate-fadeIn">
-                <TeamMemberCard member={founder} />
-              </div>
-            )}
+          <SectionTitle title="Leadership" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 max-w-3xl mx-auto">
+            <TeamMemberCard member={principal} />
+            <TeamMemberCard member={mentor} />
           </div>
         </div>
 
-        {/* Leaders Section */}
         <div className="mb-24">
-          <SectionTitle title="Club Leadership" />
-          <div className="flex flex-col sm:flex-row justify-center gap-6 lg:gap-8 max-w-7xl mx-auto">
-            {leaders.map((leader, index) => (
-              <div key={leader.id} className="w-full sm:w-1/3 lg:w-1/4 animate-fadeIn">
-                <TeamMemberCard member={leader} />
-              </div>
+          <SectionTitle title="Founder" />
+          <div className="max-w-sm mx-auto">
+            <TeamMemberCard member={founder} />
+          </div>
+        </div>
+
+        <div className="mb-24">
+          <SectionTitle title="Team Leaders" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 max-w-3xl mx-auto">
+            {leaders.map(leader => (
+              <TeamMemberCard key={leader.id} member={leader} />
             ))}
           </div>
         </div>
 
-        {/* Domain Leads Section */}
         <div className="mb-24">
           <SectionTitle title="Domain Leads" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 max-w-7xl mx-auto">
-            {domainLeads.map((lead) => (
-              <div key={lead.id} className="col-span-1 h-full animate-fadeIn">
-                <div className="h-full">
-                  <TeamMemberCard member={lead} />
-                </div>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {domainLeads.map(member => (
+              <TeamMemberCard key={member.id} member={member} />
             ))}
           </div>
         </div>
 
-        {/* Domain Co-Leads Section */}
-        <div className="mb-24">
+        <div className="mb-20">
           <SectionTitle title="Domain Co-Leads" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 max-w-7xl mx-auto">
-            {domainCoLeads.map((coLead) => (
-              <div key={coLead.id} className="col-span-1 h-full animate-fadeIn">
-                <div className="h-full">
-                  <TeamMemberCard member={coLead} />
-                </div>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {domainCoLeads.map(member => (
+              <TeamMemberCard key={member.id} member={member} />
             ))}
           </div>
-        </div>
-
-        {/* Join Us Section */}
-        <div className="mt-20 text-center animate-fadeIn">
-          <h2 className="text-3xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-              Join Our Community
-            </span>
-          </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
-            We're always looking for passionate individuals to join our team. If you're interested in contributing to our mission, reach out to us!
-          </p>
-          <a
-            href="mailto:genx.gdc@gmail.com"
-            className="inline-flex items-center px-8 py-3 text-lg font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl"
-          >
-            <Mail className="mr-2" />
-            Get in Touch
-          </a>
         </div>
       </div>
     </div>
