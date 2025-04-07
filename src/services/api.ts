@@ -188,10 +188,10 @@ interface EventData {
   end_date: string;
   venue: string;
   type: 'upcoming' | 'past' | string;
-  eventType: 'individual' | 'group';
-  fee: number;
+  eventType?: 'individual' | 'group' | string;
+  fee?: number;
   maxTeamSize?: number;
-  thumbnail: string;
+  thumbnail?: string;
 }
 
 // Add a utility function to properly normalize event data
@@ -212,12 +212,98 @@ export const normalizeEvent = (event: any): any => {
     end_date: event.end_date || event.date || new Date().toISOString(),
     venue: event.venue || 'TBD',
     type: event.type || 'upcoming',
-    eventType: event.eventType || 'individual',
-    fee: typeof event.fee === 'number' ? event.fee : 0,
-    maxTeamSize: event.eventType === 'group' && event.maxTeamSize ? 
-                Number(event.maxTeamSize) : undefined,
-    thumbnail: event.thumbnail || ''
+    
+    // Initialize the fields that need fixes
+    eventType: 'individual',
+    fee: 0,
+    thumbnail: ''
   };
+  
+  // CRITICAL FIX 1: Properly normalize eventType (individual/group)
+  if (event.eventType) {
+    // Convert to lowercase string for consistency
+    const typeStr = String(event.eventType).toLowerCase().trim();
+    if (typeStr === 'group' || typeStr === 'team') {
+      normalizedEvent.eventType = 'group';
+    } else if (typeStr === 'individual' || typeStr === 'solo') {
+      normalizedEvent.eventType = 'individual';
+    } else {
+      console.warn(`Unknown eventType "${event.eventType}" for event ${eventId}, defaulting to "individual"`);
+      normalizedEvent.eventType = 'individual';
+    }
+  } else {
+    console.log(`Event ${eventId}: No eventType specified, defaulting to "individual"`);
+  }
+  
+  // CRITICAL FIX 2: Properly normalize fee (free/paid)
+  if (event.fee === undefined || event.fee === null) {
+    normalizedEvent.fee = 0;
+    console.log(`Event ${eventId}: Setting undefined/null fee to 0`);
+  } else if (typeof event.fee === 'string') {
+    const trimmedFee = event.fee.trim();
+    
+    if (trimmedFee === '') {
+      normalizedEvent.fee = 0;
+      console.log(`Event ${eventId}: Setting empty string fee to 0`);
+    } else {
+      const parsedFee = parseFloat(trimmedFee);
+      if (isNaN(parsedFee)) {
+        console.warn(`Invalid fee string "${event.fee}" for event ${eventId}, defaulting to 0`);
+        normalizedEvent.fee = 0;
+      } else {
+        normalizedEvent.fee = parsedFee;
+        console.log(`Event ${eventId}: Parsed fee string "${trimmedFee}" to number: ${parsedFee}`);
+      }
+    }
+  } else if (typeof event.fee !== 'number') {
+    // Handle any other types (like boolean, object, etc.)
+    console.warn(`Non-numeric fee type (${typeof event.fee}) for event ${eventId}, defaulting to 0`);
+    normalizedEvent.fee = 0;
+  } else if (isNaN(event.fee)) {
+    // Extra check for NaN
+    console.warn(`NaN fee for event ${eventId}, defaulting to 0`);
+    normalizedEvent.fee = 0;
+  } else {
+    // It's a valid number
+    normalizedEvent.fee = event.fee;
+  }
+  
+  // CRITICAL FIX 3: Properly handle thumbnail
+  if (event.thumbnail) {
+    if (typeof event.thumbnail === 'string') {
+      const trimmedUrl = event.thumbnail.trim();
+      // Basic URL validation - must start with http/https or data:image
+      if (trimmedUrl.startsWith('http://') || 
+          trimmedUrl.startsWith('https://') || 
+          trimmedUrl.startsWith('data:image/')) {
+        normalizedEvent.thumbnail = trimmedUrl;
+        console.log(`Event ${eventId}: Valid thumbnail URL detected`);
+      } else {
+        console.warn(`Invalid thumbnail URL for event ${eventId}: ${trimmedUrl.substring(0, 30)}...`);
+        normalizedEvent.thumbnail = '';
+      }
+    } else {
+      console.warn(`Non-string thumbnail type (${typeof event.thumbnail}) for event ${eventId}`);
+      normalizedEvent.thumbnail = '';
+    }
+  } else {
+    console.log(`Event ${eventId}: No thumbnail provided`);
+    normalizedEvent.thumbnail = '';
+  }
+  
+  // Determine event type (upcoming or past) based on date
+  const eventDate = new Date(normalizedEvent.date);
+  const currentDate = new Date();
+  normalizedEvent.type = eventDate > currentDate ? 'upcoming' : 'past';
+  
+  console.log(`Event ${eventId} normalized:`, {
+    title: normalizedEvent.title,
+    eventType: normalizedEvent.eventType,
+    fee: normalizedEvent.fee,
+    thumbnail: normalizedEvent.thumbnail ? 'Thumbnail present' : 'No thumbnail',
+    date: normalizedEvent.date,
+    type: normalizedEvent.type
+  });
   
   return normalizedEvent;
 };
@@ -227,37 +313,65 @@ const createEvent = async (eventData: EventData) => {
   try {
     console.log('Creating event with raw data:', JSON.stringify(eventData));
     
-    // Validate required fields
-    if (!eventData.title || !eventData.description || !eventData.date || 
-        !eventData.venue || !eventData.eventType || !eventData.thumbnail) {
-      throw new Error('Missing required fields');
-    }
+    // Pre-normalize the data before sending to server
+    // This ensures critical fields are formatted correctly
+    const processedData = {
+      ...eventData,
+      
+      // Ensure fee is a number and not NaN
+      fee: (function() {
+        if (typeof eventData.fee === 'number' && !isNaN(eventData.fee)) {
+          return eventData.fee;
+        } else if (typeof eventData.fee === 'string' && eventData.fee !== '') {
+          const parsedFee = parseFloat(String(eventData.fee).trim());
+          return !isNaN(parsedFee) ? parsedFee : 0;
+        }
+        return 0; // Default for any other case
+      })(),
+      
+      // Ensure eventType is valid
+      eventType: (function() {
+        if (eventData.eventType === 'group' || eventData.eventType === 'individual') {
+          return eventData.eventType;
+        }
+        // Try to infer from string value if possible
+        if (typeof eventData.eventType === 'string') {
+          const typeStr = String(eventData.eventType).toLowerCase().trim();
+          if (typeStr === 'group' || typeStr === 'team') {
+            return 'group';
+          }
+        }
+        return 'individual'; // Default value
+      })(),
+      
+      // Ensure end_date is valid
+      end_date: eventData.end_date || eventData.date,
+      
+      // Validate thumbnail
+      thumbnail: (function() {
+        if (!eventData.thumbnail) return '';
+        
+        if (typeof eventData.thumbnail === 'string') {
+          const trimmedUrl = String(eventData.thumbnail).trim();
+          if (trimmedUrl.startsWith('http://') || 
+              trimmedUrl.startsWith('https://') || 
+              trimmedUrl.startsWith('data:image/')) {
+            return trimmedUrl;
+          }
+        }
+        return '';
+      })()
+    };
     
-    // Validate event type
-    if (!['individual', 'group'].includes(eventData.eventType)) {
-      throw new Error('Invalid event type');
-    }
+    // Debug log what's being sent to API
+    console.log('Processed data for API:', {
+      ...processedData,
+      fee: processedData.fee,
+      eventType: processedData.eventType,
+      thumbnail: processedData.thumbnail ? 'Thumbnail data present' : 'No thumbnail'
+    });
     
-    // Validate fee
-    if (typeof eventData.fee !== 'number' || eventData.fee < 0) {
-      throw new Error('Invalid fee amount');
-    }
-    
-    // Validate maxTeamSize for group events
-    if (eventData.eventType === 'group') {
-      if (!eventData.maxTeamSize || eventData.maxTeamSize < 2 || eventData.maxTeamSize > 10) {
-        throw new Error('Invalid team size for group event');
-      }
-    }
-    
-    // Validate thumbnail
-    if (!eventData.thumbnail.startsWith('http://') && 
-        !eventData.thumbnail.startsWith('https://') && 
-        !eventData.thumbnail.startsWith('data:image/')) {
-      throw new Error('Invalid thumbnail format');
-    }
-    
-    const response = await api.post('/events', eventData);
+    const response = await api.post('/events', processedData);
     return response.data;
   } catch (error) {
     handleApiError(error);
@@ -309,10 +423,52 @@ const getEvents = async () => {
     }
     
     // Normalize all events to ensure consistent data structure
-    return response.data.map(normalizeEvent);
+    const normalizedEvents = response.data.map(event => {
+      // Create a properly normalized event
+      const normalizedEvent = {
+        id: event._id || event.id,
+        title: event.title || 'Untitled Event',
+        description: event.description || '',
+        date: event.date || new Date().toISOString(),
+        end_date: event.end_date || event.date || new Date().toISOString(),
+        venue: event.venue || 'TBD',
+        
+        // Ensure eventType is properly set
+        eventType: event.eventType === 'group' ? 'group' : 'individual',
+        
+        // Ensure fee is a number
+        fee: typeof event.fee === 'number' ? event.fee : 
+             typeof event.fee === 'string' ? Number(event.fee) || 0 : 0,
+             
+        // Handle maxTeamSize if eventType is group
+        maxTeamSize: event.eventType === 'group' && event.maxTeamSize ? 
+                    Number(event.maxTeamSize) : undefined,
+                    
+        // Ensure thumbnail is properly formatted
+        thumbnail: event.thumbnail && typeof event.thumbnail === 'string' && 
+                  (event.thumbnail.startsWith('http') || event.thumbnail.startsWith('data:')) ? 
+                  event.thumbnail : null,
+                  
+        // Set the type based on date
+        type: new Date(event.date) > new Date() ? 'upcoming' : 'past'
+      };
+      
+      console.log(`Normalized event ${normalizedEvent.id}:`, {
+        title: normalizedEvent.title,
+        eventType: normalizedEvent.eventType,
+        fee: normalizedEvent.fee,
+        hasThumbnail: !!normalizedEvent.thumbnail
+      });
+      
+      return normalizedEvent;
+    });
+    
+    console.log(`Normalized ${normalizedEvents.length} events`);
+    return normalizedEvents;
   } catch (error) {
     handleApiError(error);
-    throw error;
+    console.error('Error fetching events:', error);
+    return [];
   }
 };
 
@@ -739,7 +895,44 @@ const getEventById = async (id: string) => {
       return null;
     }
     
-    return normalizeEvent(response.data);
+    // Create a properly normalized event
+    const event = response.data;
+    const normalizedEvent = {
+      id: event._id || event.id || id,
+      title: event.title || 'Untitled Event',
+      description: event.description || '',
+      date: event.date || new Date().toISOString(),
+      end_date: event.end_date || event.date || new Date().toISOString(),
+      venue: event.venue || 'TBD',
+      
+      // Ensure eventType is properly set
+      eventType: event.eventType === 'group' ? 'group' : 'individual',
+      
+      // Ensure fee is a number
+      fee: typeof event.fee === 'number' ? event.fee : 
+           typeof event.fee === 'string' ? Number(event.fee) || 0 : 0,
+           
+      // Handle maxTeamSize if eventType is group
+      maxTeamSize: event.eventType === 'group' && event.maxTeamSize ? 
+                  Number(event.maxTeamSize) : undefined,
+                  
+      // Ensure thumbnail is properly formatted
+      thumbnail: event.thumbnail && typeof event.thumbnail === 'string' && 
+                (event.thumbnail.startsWith('http') || event.thumbnail.startsWith('data:')) ? 
+                event.thumbnail : null,
+                
+      // Set the type based on date
+      type: new Date(event.date) > new Date() ? 'upcoming' : 'past'
+    };
+    
+    console.log(`Normalized event ${normalizedEvent.id}:`, {
+      title: normalizedEvent.title,
+      eventType: normalizedEvent.eventType,
+      fee: normalizedEvent.fee,
+      hasThumbnail: !!normalizedEvent.thumbnail
+    });
+    
+    return normalizedEvent;
   } catch (error) {
     handleApiError(error);
     console.error(`Error fetching event ${id}:`, error);
