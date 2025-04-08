@@ -4,11 +4,9 @@ import { getEventById, getEventRegistrations } from '../../services/api';
 import { handleError } from '../../utils/errorHandling';
 import { 
   Users, User, Calendar, MapPin, Download, ChevronDown, ChevronUp, 
-  Mail, Phone, School, BookOpen, UserCheck, Search, DollarSign, X, Eye, Edit 
+  Mail, Phone, School, BookOpen, UserCheck, Search, DollarSign, X 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { exportToCSV, ExportData } from '../../utils/exportToCSV';
-import type { Event, Registration, GroupRegistration, RegistrationsData } from '../../types/event';
 
 interface TeamMember {
   name: string;
@@ -16,31 +14,49 @@ interface TeamMember {
   registration_no: string;
   mobile_no: string;
   semester: string;
-  isLeader: boolean;
-  status: 'registered' | 'attended' | 'cancelled';
+  college: string;
 }
 
-const searchableFields: (keyof Registration)[] = [
-  'name',
-  'email',
-  'registration_no',
-  'mobile_no',
-  'semester',
-  'status'
-];
+interface Registration {
+  id: string;
+  name: string;
+  email: string;
+  registration_no: string;
+  mobile_no: string;
+  semester: string;
+  college: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  created_at: string;
+  payment_status?: 'pending' | 'completed';
+  payment_amount?: number;
+  teamName?: string;
+  members?: TeamMember[];
+}
 
-const EventRegistrations: React.FC = () => {
+interface Event {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  end_date: string;
+  venue: string;
+  eventType?: 'individual' | 'group';
+  fee?: number;
+  maxTeamSize?: number;
+  thumbnail?: string;
+}
+
+const EventRegistrations = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
   const [event, setEvent] = useState<Event | null>(null);
-  const [registrations, setRegistrations] = useState<RegistrationsData>({});
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
 
   useEffect(() => {
     if (!eventId) {
@@ -51,41 +67,19 @@ const EventRegistrations: React.FC = () => {
   }, [eventId, navigate]);
 
   const fetchEventAndRegistrations = async () => {
-    if (!eventId) return;
-
     try {
-      const [eventResponse, registrationsResponse] = await Promise.all([
-        fetch(`/api/events/${eventId}`),
-        fetch(`/api/events/register/event/${eventId}`)
+      setLoading(true);
+      const [eventData, registrationsData] = await Promise.all([
+        getEventById(eventId as string),
+        getEventRegistrations(eventId as string)
       ]);
-
-      if (!eventResponse.ok || !registrationsResponse.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const eventData = await eventResponse.json();
-      const registrationsData = await registrationsResponse.json();
-
-      // Transform event data to match Event interface
-      const transformedEventData: Event = {
-        _id: eventData._id,
-        title: eventData.title,
-        description: eventData.description,
-        date: eventData.date,
-        end_date: eventData.end_date,
-        venue: eventData.venue,
-        eventType: eventData.eventType,
-        fee: eventData.fee,
-        maxTeamSize: eventData.maxTeamSize,
-        thumbnail: eventData.thumbnail,
-        type: eventData.type
-      };
-
-      setEvent(transformedEventData);
+      
+      setEvent(eventData);
       setRegistrations(registrationsData);
-      setLoading(false);
     } catch (error) {
-      toast.error('Failed to load data');
+      handleError(error, 'Failed to fetch event data');
+      navigate('/admin/events');
+    } finally {
       setLoading(false);
     }
   };
@@ -142,74 +136,132 @@ const EventRegistrations: React.FC = () => {
     }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-  };
-
-  const handleExport = () => {
-    if (!event) return;
-
-    const exportData: ExportData[] = Object.entries(registrations).flatMap(([key, value]) => {
-      if (key === 'individuals' && Array.isArray(value)) {
-        const individuals = value as Registration[];
-        return individuals.map(reg => ({
-          'Registration Type': 'Individual',
-          'Name': reg.name,
-          'Email': reg.email,
-          'Registration No': reg.registration_no,
-          'Mobile No': reg.mobile_no,
-          'Semester': reg.semester,
-          'Status': reg.status,
-          'Registration Date': new Date(reg.created_at).toLocaleString(),
-          'Fee Paid': event.fee
-        }));
-      } else if (value && 'teamName' in value && Array.isArray((value as GroupRegistration).members)) {
-        const groupReg = value as GroupRegistration;
-        return groupReg.members.map(member => ({
-          'Registration Type': 'Team',
-          'Team Name': groupReg.teamName,
-          'Name': member.name,
-          'Email': member.email,
-          'Registration No': member.registration_no,
-          'Mobile No': member.mobile_no,
-          'Semester': member.semester,
-          'Role': member.isLeader ? 'Leader' : 'Member',
-          'Status': member.status,
-          'Registration Date': new Date(member.created_at).toLocaleString(),
-          'Fee Paid': event.fee
-        }));
+  const exportToCSV = () => {
+    try {
+      const headers = ['Name', 'Email', 'Registration No', 'Mobile', 'College', 'Semester', 'Status', 'Registration Date'];
+      
+      // Add team-specific headers if this is a group event
+      if (event?.eventType === 'group') {
+        headers.push('Team Name', 'Team Size');
       }
-      return [];
-    });
-
-    exportToCSV(exportData, `event-registrations-${eventId}`);
-  };
-
-  const matchesSearchQuery = (registration: Registration): boolean => {
-    return searchableFields.some(field => {
-      const value = registration[field];
-      return value && String(value).toLowerCase().includes(searchQuery.toLowerCase());
-    });
-  };
-
-  const getFilteredRegistrations = (): RegistrationsData => {
-    return Object.entries(registrations).reduce<RegistrationsData>((acc, [key, value]) => {
-      if (key === 'individuals' && Array.isArray(value)) {
-        const individuals = value as Registration[];
-        const filtered = individuals.filter(matchesSearchQuery);
-        if (filtered.length > 0) acc[key] = filtered;
-      } else if (value && 'teamName' in value && Array.isArray((value as GroupRegistration).members)) {
-        const groupReg = value as GroupRegistration;
-        const filteredMembers = groupReg.members.filter(matchesSearchQuery);
-        if (filteredMembers.length > 0) {
-          acc[key] = { ...groupReg, members: filteredMembers };
+      
+      let csvContent = headers.join(',') + '\n';
+      
+      registrations.forEach(reg => {
+        const row = [
+          `"${reg.name}"`,
+          `"${reg.email}"`,
+          `"${reg.registration_no}"`,
+          `"${reg.mobile_no}"`,
+          `"${reg.college}"`,
+          `"${reg.semester}"`,
+          `"${reg.status}"`,
+          `"${new Date(reg.created_at).toLocaleDateString()}"`,
+        ];
+        
+        // Add team data if group event
+        if (event?.eventType === 'group') {
+          row.push(
+            `"${reg.teamName || ''}"`,
+            `"${(reg.members?.length || 0) + 1}"` // +1 for team leader
+          );
         }
-      }
-      return acc;
-    }, {});
+        
+        csvContent += row.join(',') + '\n';
+        
+        // Add team members if applicable
+        if (event?.eventType === 'group' && reg.members && reg.members.length > 0) {
+          reg.members.forEach((member, index) => {
+            const memberRow = [
+              `"${member.name} (Member ${index + 1})"`,
+              `"${member.email}"`,
+              `"${member.registration_no}"`,
+              `"${member.mobile_no}"`,
+              `"${member.college}"`,
+              `"${member.semester}"`,
+              `"${reg.status}"`,
+              `"${new Date(reg.created_at).toLocaleDateString()}"`,
+              `"${reg.teamName || ''}"`,
+              `""` // No team size for members
+            ];
+            csvContent += memberRow.join(',') + '\n';
+          });
+        }
+      });
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${event?.title || 'event'}-registrations.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Registrations exported successfully');
+    } catch (error) {
+      handleError(error, 'Failed to export registrations');
+    }
   };
 
-  const filteredRegistrations = getFilteredRegistrations();
+  // Filter and sort registrations
+  const filteredRegistrations = registrations
+    .filter(reg => {
+      // Apply search filter
+      const searchFields = [
+        reg.name, 
+        reg.email, 
+        reg.registration_no, 
+        reg.mobile_no, 
+        reg.college,
+        reg.teamName || ''
+      ];
+      
+      const matchesSearch = searchTerm === '' || 
+        searchFields.some(field => 
+          field.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      
+      // Apply status filter
+      const matchesStatus = statusFilter === 'all' || reg.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      // Handle sorting
+      let valueA: any;
+      let valueB: any;
+      
+      switch (sortField) {
+        case 'name':
+          valueA = a.name;
+          valueB = b.name;
+          break;
+        case 'college':
+          valueA = a.college;
+          valueB = b.college;
+          break;
+        case 'status':
+          valueA = a.status;
+          valueB = b.status;
+          break;
+        case 'created_at':
+        default:
+          valueA = new Date(a.created_at).getTime();
+          valueB = new Date(b.created_at).getTime();
+      }
+      
+      // Compare values based on sort direction
+      if (typeof valueA === 'string' && typeof valueB === 'string') {
+        return sortDirection === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else {
+        return sortDirection === 'asc' 
+          ? valueA - valueB 
+          : valueB - valueA;
+      }
+    });
 
   if (loading) {
     return (
@@ -237,243 +289,358 @@ const EventRegistrations: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Event Registrations</h1>
-        <div className="flex space-x-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search registrations..."
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
-          </div>
-          <button
-            onClick={handleExport}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            <Download className="mr-2" size={20} />
-            Export to CSV
-          </button>
-        </div>
+    <div className="p-6">
+      <div className="mb-6">
+        <button
+          onClick={() => navigate('/admin/events')}
+          className="text-primary-400 hover:text-primary-300 text-sm font-medium flex items-center"
+        >
+          <ChevronUp className="h-4 w-4 mr-1" />
+          Back to Events
+        </button>
       </div>
 
-      <div className="space-y-6">
-        {Object.entries(filteredRegistrations).map(([key, value]) => (
-          <div key={key} className="bg-white rounded-lg shadow p-6">
-            {key === 'individuals' && Array.isArray(value) ? (
-              <div>
-                <h2 className="text-xl font-semibold mb-4">Individual Registrations</h2>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration No</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fee Paid</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {value.map((reg) => (
-                        <tr key={reg._id}>
-                          <td className="px-6 py-4 whitespace-nowrap">{reg.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{reg.email}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{reg.registration_no}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              reg.status === 'attended' ? 'bg-green-100 text-green-800' :
-                              reg.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {reg.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">₹{event?.fee}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <button
-                              onClick={() => setSelectedTeam(reg._id)}
-                              className="text-indigo-600 hover:text-indigo-900 mr-2"
-                            >
-                              <Eye size={20} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+      <div className="glass-card p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2">
+            <h1 className="text-2xl font-bold mb-2">{event.title}</h1>
+            <p className="text-gray-300 mb-4">{event.description}</p>
+            
+            <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center text-gray-300">
+                <Calendar className="h-4 w-4 mr-2 text-primary-400" />
+                <span>
+                  {new Date(event.date).toLocaleDateString('en-US', { 
+                    day: 'numeric', 
+                    month: 'short',
+                    year: 'numeric' 
+                  })}
+                  {' - '}
+                  {new Date(event.end_date).toLocaleDateString('en-US', { 
+                    day: 'numeric', 
+                    month: 'short',
+                    year: 'numeric' 
+                  })}
+                </span>
               </div>
-            ) : value && 'teamName' in value ? (
-              <div>
-                <h2 className="text-xl font-semibold mb-4">Team: {value.teamName}</h2>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-sm text-gray-500">Total Fee: ₹{value.totalFee}</span>
-                  <button
-                    onClick={() => setSelectedTeam(key)}
-                    className="text-indigo-600 hover:text-indigo-900"
-                  >
-                    View Details
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fee Paid</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {value.members.map((member) => (
-                        <tr key={member._id}>
-                          <td className="px-6 py-4 whitespace-nowrap">{member.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {member.isLeader ? 'Leader' : 'Member'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">{member.email}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              member.status === 'attended' ? 'bg-green-100 text-green-800' :
-                              member.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {member.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">₹{event?.fee}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              
+              <div className="flex items-center text-gray-300">
+                <MapPin className="h-4 w-4 mr-2 text-primary-400" />
+                <span>{event.venue}</span>
               </div>
-            ) : null}
+              
+              <div className="flex items-center text-gray-300">
+                {event.eventType === 'individual' ? (
+                  <>
+                    <User className="h-4 w-4 mr-2 text-primary-400" />
+                    <span>Individual Event</span>
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-4 w-4 mr-2 text-primary-400" />
+                    <span>Group Event {event.maxTeamSize && `(Max ${event.maxTeamSize} members)`}</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* Registration Details Modal */}
-      {selectedTeam && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Registration Details</h2>
-                <button
-                  onClick={() => setSelectedTeam(null)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
-              {selectedTeam in registrations && registrations[selectedTeam] && 'teamName' in registrations[selectedTeam] ? (
-                <div>
-                  <h3 className="text-lg font-medium mb-2">Team: {(registrations[selectedTeam] as GroupRegistration).teamName}</h3>
-                  <div className="space-y-4">
-                    {(registrations[selectedTeam] as GroupRegistration).members.map((member) => (
-                      <div key={member._id} className="border p-4 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-medium">{member.name}</h4>
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            member.isLeader ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {member.isLeader ? 'Leader' : 'Member'}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-500">Email</p>
-                            <p>{member.email}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Registration No</p>
-                            <p>{member.registration_no}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Mobile No</p>
-                            <p>{member.mobile_no}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Semester</p>
-                            <p>{member.semester}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Status</p>
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              member.status === 'attended' ? 'bg-green-100 text-green-800' :
-                              member.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {member.status}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Fee Paid</p>
-                            <p>₹{event?.fee}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  {registrations.individuals?.find(reg => reg._id === selectedTeam) && (
-                    <div className="border p-4 rounded-lg">
-                      <h3 className="text-lg font-medium mb-4">Individual Registration</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-500">Name</p>
-                          <p>{registrations.individuals?.find(reg => reg._id === selectedTeam)?.name}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Email</p>
-                          <p>{registrations.individuals?.find(reg => reg._id === selectedTeam)?.email}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Registration No</p>
-                          <p>{registrations.individuals?.find(reg => reg._id === selectedTeam)?.registration_no}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Mobile No</p>
-                          <p>{registrations.individuals?.find(reg => reg._id === selectedTeam)?.mobile_no}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Semester</p>
-                          <p>{registrations.individuals?.find(reg => reg._id === selectedTeam)?.semester}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Status</p>
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            registrations.individuals?.find(reg => reg._id === selectedTeam)?.status === 'attended' ? 'bg-green-100 text-green-800' :
-                            registrations.individuals?.find(reg => reg._id === selectedTeam)?.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {registrations.individuals?.find(reg => reg._id === selectedTeam)?.status}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Fee Paid</p>
-                          <p>₹{event?.fee}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+          
+          <div className="flex flex-col justify-center items-center bg-dark-800/50 rounded-lg p-4">
+            <div className="text-4xl font-bold text-primary-400 mb-2">
+              {filteredRegistrations.length}
+            </div>
+            <div className="text-gray-300 text-center">
+              {event.eventType === 'group' ? 'Teams Registered' : 'Participants Registered'}
+            </div>
+            
+            <div className="mt-4">
+              <button 
+                onClick={exportToCSV}
+                className="primary-button flex items-center"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export to CSV
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      <div className="glass-card p-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <h2 className="text-xl font-bold">
+            {event.eventType === 'group' ? 'Team Registrations' : 'Participant Registrations'} 
+          </h2>
+          
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search registrations..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full rounded-md bg-dark-800 border-dark-600 text-white shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              />
+              <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            </div>
+            
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-md bg-dark-800 border-dark-600 text-white shadow-sm focus:border-primary-500 focus:ring-primary-500"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        {filteredRegistrations.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400 mb-2">No registrations found</p>
+            <p className="text-gray-500 text-sm">
+              {searchTerm || statusFilter !== 'all' 
+                ? 'Try adjusting your search or filters' 
+                : 'Share the event link to get participants registered'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-dark-800">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-10">
+                    #
+                  </th>
+                  <th 
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center">
+                      Name
+                      {sortField === 'name' && (
+                        sortDirection === 'asc' ? 
+                          <ChevronUp className="w-4 h-4 ml-1" /> : 
+                          <ChevronDown className="w-4 h-4 ml-1" />
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Contact Info
+                  </th>
+                  <th 
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('college')}
+                  >
+                    <div className="flex items-center">
+                      College
+                      {sortField === 'college' && (
+                        sortDirection === 'asc' ? 
+                          <ChevronUp className="w-4 h-4 ml-1" /> : 
+                          <ChevronDown className="w-4 h-4 ml-1" />
+                      )}
+                    </div>
+                  </th>
+                  {event.eventType === 'group' && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Team
+                    </th>
+                  )}
+                  <th 
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center">
+                      Status
+                      {sortField === 'status' && (
+                        sortDirection === 'asc' ? 
+                          <ChevronUp className="w-4 h-4 ml-1" /> : 
+                          <ChevronDown className="w-4 h-4 ml-1" />
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('created_at')}
+                  >
+                    <div className="flex items-center">
+                      Registered On
+                      {sortField === 'created_at' && (
+                        sortDirection === 'asc' ? 
+                          <ChevronUp className="w-4 h-4 ml-1" /> : 
+                          <ChevronDown className="w-4 h-4 ml-1" />
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-dark-700">
+                {filteredRegistrations.map((registration, index) => (
+                  <React.Fragment key={registration.id}>
+                    <tr className="hover:bg-dark-800/50">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {index + 1}
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <div className="font-medium text-white">{registration.name}</div>
+                        <div className="text-xs text-gray-400">{registration.registration_no}</div>
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <div className="flex items-center text-gray-300 mb-1">
+                          <Mail className="h-3 w-3 mr-2 text-gray-400" />
+                          <span>{registration.email}</span>
+                        </div>
+                        <div className="flex items-center text-gray-300">
+                          <Phone className="h-3 w-3 mr-2 text-gray-400" />
+                          <span>{registration.mobile_no}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <div className="text-gray-300">{registration.college}</div>
+                        <div className="flex items-center text-xs text-gray-400 mt-1">
+                          <BookOpen className="h-3 w-3 mr-1" />
+                          <span>Semester {registration.semester}</span>
+                        </div>
+                      </td>
+                      {event.eventType === 'group' && (
+                        <td className="px-4 py-4 text-sm">
+                          <div className="text-white font-medium">{registration.teamName || 'N/A'}</div>
+                          <div className="flex items-center text-xs text-gray-400 mt-1">
+                            <Users className="h-3 w-3 mr-1" />
+                            <span>{(registration.members?.length || 0) + 1} members</span>
+                          </div>
+                          {registration.members && registration.members.length > 0 && (
+                            <button
+                              onClick={() => toggleExpandRow(registration.id)}
+                              className="text-xs text-primary-400 hover:text-primary-300 mt-1 flex items-center"
+                            >
+                              {expandedRows[registration.id] ? (
+                                <>
+                                  <ChevronUp className="h-3 w-3 mr-1" />
+                                  Hide members
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="h-3 w-3 mr-1" />
+                                  View members
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </td>
+                      )}
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          registration.status === 'confirmed' 
+                            ? 'bg-green-900 text-green-300' 
+                            : registration.status === 'rejected'
+                            ? 'bg-red-900 text-red-300'
+                            : 'bg-yellow-900 text-yellow-300'
+                        }`}>
+                          {registration.status}
+                        </span>
+                        
+                        {event.fee && (
+                          <div className="mt-1">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              registration.payment_status === 'completed' 
+                                ? 'bg-green-900 text-green-300' 
+                                : 'bg-gray-700 text-gray-300'
+                            }`}>
+                              {registration.payment_status === 'completed' ? 'Paid' : 'Payment Pending'}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {new Date(registration.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex space-x-2">
+                          {registration.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => updateRegistrationStatus(registration.id, 'confirmed')}
+                                className="p-1 bg-green-900 text-green-300 rounded hover:bg-green-800"
+                                title="Confirm Registration"
+                              >
+                                <UserCheck className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => updateRegistrationStatus(registration.id, 'rejected')}
+                                className="p-1 bg-red-900 text-red-300 rounded hover:bg-red-800"
+                                title="Reject Registration"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          
+                          {event.fee && registration.payment_status !== 'completed' && (
+                            <button
+                              onClick={() => updatePaymentStatus(registration.id, 'completed')}
+                              className="p-1 bg-primary-900 text-primary-300 rounded hover:bg-primary-800"
+                              title="Mark as Paid"
+                            >
+                              <DollarSign className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* Expanded row for team members */}
+                    {event.eventType === 'group' && 
+                     expandedRows[registration.id] && 
+                     registration.members && 
+                     registration.members.length > 0 && (
+                      <tr className="bg-dark-900">
+                        <td colSpan={8} className="px-4 py-4">
+                          <div className="bg-dark-800 rounded-lg p-4">
+                            <h4 className="text-sm font-medium text-white mb-3">Team Members</h4>
+                            <div className="space-y-4">
+                              {registration.members.map((member, idx) => (
+                                <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-dark-700 pb-3">
+                                  <div>
+                                    <div className="font-medium text-white">{member.name}</div>
+                                    <div className="text-xs text-gray-400">{member.registration_no}</div>
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center text-gray-300 mb-1">
+                                      <Mail className="h-3 w-3 mr-2 text-gray-400" />
+                                      <span>{member.email}</span>
+                                    </div>
+                                    <div className="flex items-center text-gray-300">
+                                      <Phone className="h-3 w-3 mr-2 text-gray-400" />
+                                      <span>{member.mobile_no}</span>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="text-gray-300">{member.college}</div>
+                                    <div className="flex items-center text-xs text-gray-400 mt-1">
+                                      <BookOpen className="h-3 w-3 mr-1" />
+                                      <span>Semester {member.semester}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
