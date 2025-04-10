@@ -12,6 +12,7 @@ const resourceRoutes = require('./routes/resources');
 const galleryRoutes = require('./routes/gallery');
 const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payment');
+const leaderboardRoutes = require('./routes/leaderboard');
 
 // Load environment variables
 dotenv.config();
@@ -79,6 +80,7 @@ app.use('/api/resources', resourceRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
 // Error handling for payment routes
 app.use('/api/payments', (err, req, res, next) => {

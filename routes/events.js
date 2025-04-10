@@ -321,4 +321,70 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
   }
 });
 
+// Update registration status (Admin only)
+router.put('/:eventId/registrations/:registrationId/status', protect, authorize('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { eventId, registrationId } = req.params;
+    const { status } = req.body;
+
+    if (!['confirmed', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value' });
+    }
+
+    const registration = await EventRegistration.findOne({
+      _id: registrationId,
+      event: eventId
+    });
+
+    if (!registration) {
+      return res.status(404).json({ message: 'Registration not found' });
+    }
+
+    registration.status = status;
+    await registration.save();
+
+    res.json({
+      success: true,
+      message: `Registration ${status === 'confirmed' ? 'confirmed' : 'rejected'} successfully`,
+      registration
+    });
+  } catch (err) {
+    console.error('Error updating registration status:', err);
+    res.status(500).json({ message: 'Error updating registration status' });
+  }
+});
+
+// Update payment status (Admin only)
+router.put('/:eventId/registrations/:registrationId/payment', protect, authorize('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { eventId, registrationId } = req.params;
+    const { status } = req.body;
+
+    if (!['completed', 'pending'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid payment status value' });
+    }
+
+    const registration = await EventRegistration.findOne({
+      _id: registrationId,
+      event: eventId
+    });
+
+    if (!registration) {
+      return res.status(404).json({ message: 'Registration not found' });
+    }
+
+    registration.paymentStatus = status;
+    await registration.save();
+
+    res.json({
+      success: true,
+      message: `Payment marked as ${status}`,
+      registration
+    });
+  } catch (err) {
+    console.error('Error updating payment status:', err);
+    res.status(500).json({ message: 'Error updating payment status' });
+  }
+});
+
 module.exports = router;
