@@ -20,12 +20,21 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: [
-    'https://genspark-techfest-sec-sasaram.netlify.app',
-    'https://avinya-backend.onrender.com',
-    'http://localhost:5173',
-    'http://localhost:3000'
-  ],
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'https://genspark-techfest-sec-sasaram.netlify.app',
+      'https://avinya-backend.onrender.com',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ];
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Requested-With', 'X-Razorpay-Signature'],
@@ -36,6 +45,9 @@ const corsOptions = {
 
 // Apply CORS before other middleware
 app.use(cors(corsOptions));
+
+// Additional CORS headers for preflight requests
+app.options('*', cors(corsOptions));
 
 // Security Middleware
 app.use(helmet()); // Adds security headers
