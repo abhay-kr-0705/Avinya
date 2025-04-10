@@ -20,35 +20,17 @@ dotenv.config();
 const app = express();
 
 // CORS configuration
-const corsOptions = {
-  origin: function(origin, callback) {
-    const allowedOrigins = [
-      'https://genspark-techfest-sec-sasaram.netlify.app',
-      'https://avinya-backend.onrender.com',
-      'http://localhost:5173',
-      'http://localhost:3000'
-    ];
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
+app.use(cors({
+  origin: ['http://localhost:3000', 'https://genspark-techfest-sec-sasaram.netlify.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Requested-With', 'X-Razorpay-Signature'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
+  maxAge: 86400 // 24 hours
+}));
 
-// Apply CORS before other middleware
-app.use(cors(corsOptions));
-
-// Additional CORS headers for preflight requests
-app.options('*', cors(corsOptions));
+// Add OPTIONS handling for preflight requests
+app.options('*', cors());
 
 // Security Middleware
 app.use(helmet()); // Adds security headers
@@ -148,7 +130,7 @@ connectDB().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`API available at http://localhost:${PORT}/api`);
-    console.log('CORS enabled for:', corsOptions.origin);
+    console.log('CORS enabled for:', cors.origin);
   });
 }).catch(err => {
   console.error('Failed to start server:', err);
