@@ -287,4 +287,36 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
   }
 }));
 
+// Clear all registrations (Superadmin only)
+router.delete('/registrations/clear-all', protect, authorize('superadmin'), asyncHandler(async (req, res) => {
+  try {
+    console.log('Admin request to clear all registrations received');
+    
+    // Delete all registration documents
+    const deleteResult = await EventRegistration.deleteMany({});
+    console.log(`Deleted ${deleteResult.deletedCount} registration documents`);
+    
+    // Clear registrations array from all events
+    const updateResult = await Event.updateMany(
+      {}, 
+      { $set: { registrations: [] } }
+    );
+    console.log(`Updated ${updateResult.modifiedCount} events to remove registrations`);
+    
+    res.json({
+      success: true,
+      message: 'All registrations have been cleared successfully',
+      deletedCount: deleteResult.deletedCount,
+      eventsUpdated: updateResult.modifiedCount
+    });
+  } catch (err) {
+    console.error('Error clearing all registrations:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error clearing registrations',
+      error: err.message
+    });
+  }
+}));
+
 module.exports = router;
