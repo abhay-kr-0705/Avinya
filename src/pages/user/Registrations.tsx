@@ -186,8 +186,10 @@ const UserRegistrations = () => {
                           <div className="mt-2">
                             <p className="text-sm text-gray-400 mb-1">Team Members:</p>
                             <ul className="list-disc list-inside text-sm text-gray-300 pl-2">
-                              {registration.members.map((member, index) => (
-                                <li key={index}>{member.name} ({member.college})</li>
+                              {registration.members.map((member) => (
+                                <li key={`${member.email}-${member.registration_no}`}>
+                                  {member.name} ({member.college})
+                                </li>
                               ))}
                             </ul>
                           </div>
