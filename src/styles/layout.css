@@ -1,0 +1,56 @@
+/* Layout variables and utilities */
+
+:root {
+  --navbar-height: 5rem; /* 80px */
+  --content-padding-top: 1.5rem;
+  --content-padding-bottom: 2rem;
+  --content-padding-x: 1rem;
+  --footer-height: 15rem;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --content-padding-top: 2rem;
+    --content-padding-bottom: 3rem;
+    --content-padding-x: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --content-padding-top: 3rem;
+    --content-padding-bottom: 4rem;
+    --content-padding-x: 2rem;
+  }
+}
+
+/* Utility classes */
+.page-container {
+  width: 100%;
+  min-height: calc(100vh - var(--navbar-height));
+  padding-top: var(--navbar-height);
+  padding-bottom: var(--content-padding-bottom);
+}
+
+.content-container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--content-padding-top) var(--content-padding-x) var(--content-padding-bottom);
+}
+
+/* Utility for creating page sections with proper spacing */
+.page-section {
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+  .page-section {
+    margin-bottom: 3rem;
+  }
+}
+
+/* Utility for space under the navbar */
+.navbar-spacer {
+  height: var(--navbar-height);
+} 
