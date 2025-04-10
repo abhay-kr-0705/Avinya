@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const photoSchema = new mongoose.Schema({
   url: {
@@ -122,4 +122,6 @@ gallerySchema.pre('findOneAndUpdate', function(next) {
   next();
 });
 
-module.exports = mongoose.model('Gallery', gallerySchema);
+const Gallery = mongoose.model('Gallery', gallerySchema);
+
+export default Gallery;

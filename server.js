@@ -1,15 +1,17 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const helmet = require('helmet'); // Import Helmet for security headers
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import helmet from 'helmet'; // Import Helmet for security headers
+import crypto from 'crypto';
 
 // Import routes
-const authRoutes = require('./routes/auth');
-const eventRoutes = require('./routes/events');
-const resourceRoutes = require('./routes/resources');
-const galleryRoutes = require('./routes/gallery');
-const adminRoutes = require('./routes/admin');
+import authRoutes from './routes/auth.js';
+import eventRoutes from './routes/events.js';
+import resourceRoutes from './routes/resources.js';
+import galleryRoutes from './routes/gallery.js';
+import adminRoutes from './routes/admin.js';
+import paymentRoutes from './routes/payment.js';
 
 // Load environment variables
 dotenv.config();
@@ -18,37 +20,56 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: ['https://genx-developers-club.netlify.app', 'https://avinya-tech-fest-sec-sasaram.netlify.app', 'http://localhost:5173', 'http://localhost:3000'],
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'https://genspark-techfest-sec-sasaram.netlify.app',
+      'https://avinya-backend.onrender.com',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      console.log('Blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Requested-With', 'X-Razorpay-Signature'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
   preflightContinue: false,
   optionsSuccessStatus: 204
 };
 
+// Apply CORS before any other middleware
 app.use(cors(corsOptions));
 
-// CORS middleware to ensure headers are set for all responses
+// Add CORS debugging middleware
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || corsOptions.origin[0]);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', corsOptions.methods.join(','));
-  res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(204).send();
-  }
+  console.log('Request origin:', req.headers.origin);
+  console.log('Request method:', req.method);
+  console.log('Request path:', req.path);
   next();
 });
 
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
 // Security Middleware
-app.use(helmet()); // Adds security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "unsafe-none" }
+}));
 
 // Additional headers to prevent clickjacking
 app.use((req, res, next) => {
-  res.setHeader("X-Frame-Options", "DENY"); // Blocks all iframe embedding
-  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'"); // No iframe embedding allowed
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
   next();
 });
 
@@ -71,6 +92,17 @@ app.use('/api/events', eventRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
+
+// Error handling for payment routes
+app.use('/api/payments', (err, req, res, next) => {
+  console.error('Payment Error:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Payment processing error',
+    error: process.env.NODE_ENV === 'development' ? err : undefined
+  });
+});
 
 // 404 handler
 app.use((req, res) => {
@@ -109,7 +141,7 @@ async function connectDB() {
     console.log('MongoDB Connected Successfully');
     
     // Test the connection by trying to fetch events
-    const Event = require('./models/Event');
+    const Event = (await import('./models/Event.js')).default;
     const events = await Event.find();
     console.log(`Successfully fetched ${events.length} events from database`);
     events.forEach(event => {
@@ -135,4 +167,4 @@ connectDB().then(() => {
   process.exit(1);
 });
 
-module.exports = app;
+export default app;

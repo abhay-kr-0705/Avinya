@@ -1,8 +1,10 @@
-const express = require('express');
+import express from 'express';
+import User from '../models/User.js';
+import Event from '../models/Event.js';
+import EventRegistration from '../models/EventRegistration.js';
+import { protect, authorize } from '../middleware/auth.js';
+
 const router = express.Router();
-const User = require('../models/User');
-const Event = require('../models/Event');
-const { protect, authorize } = require('../middleware/auth');
 
 // Error handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>
@@ -144,14 +146,10 @@ router.get('/events', asyncHandler(async (req, res) => {
   }
 }));
 
-// Get event registrations
+// Get event registrations with detailed information
 router.get('/events/:id/registrations', asyncHandler(async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id)
-      .populate({
-        path: 'registrations.user',
-        select: 'name email registration_no branch semester mobile role'
-      });
+    const event = await Event.findById(req.params.id);
     
     if (!event) {
       return res.status(404).json({
@@ -160,10 +158,51 @@ router.get('/events/:id/registrations', asyncHandler(async (req, res) => {
       });
     }
 
+    // Get all registrations for this event with detailed information
+    const registrations = await EventRegistration.find({ event: req.params.id })
+      .select('name email registration_no mobile_no semester teamName isLeader status paymentStatus created_at')
+      .sort({ created_at: -1 });
+
+    // Group registrations by team if it's a group event
+    let formattedRegistrations = registrations;
+    if (event.eventType === 'group') {
+      const teamMap = new Map();
+      
+      registrations.forEach(reg => {
+        if (reg.teamName) {
+          if (!teamMap.has(reg.teamName)) {
+            teamMap.set(reg.teamName, {
+              teamName: reg.teamName,
+              members: [],
+              leader: null
+            });
+          }
+          
+          const team = teamMap.get(reg.teamName);
+          if (reg.isLeader) {
+            team.leader = reg;
+          } else {
+            team.members.push(reg);
+          }
+        }
+      });
+      
+      formattedRegistrations = Array.from(teamMap.values());
+    }
+
     res.json({
       success: true,
-      count: event.registrations.length,
-      data: event.registrations
+      event: {
+        id: event._id,
+        title: event.title,
+        eventType: event.eventType,
+        date: event.date,
+        venue: event.venue
+      },
+      registrations: formattedRegistrations,
+      totalRegistrations: registrations.length,
+      paidRegistrations: registrations.filter(r => r.paymentStatus === 'paid').length,
+      pendingRegistrations: registrations.filter(r => r.paymentStatus === 'pending').length
     });
   } catch (err) {
     console.error('Error fetching event registrations:', err);
@@ -249,4 +288,4 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
   }
 }));
 
-module.exports = router;
+export default router;

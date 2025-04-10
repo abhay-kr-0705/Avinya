@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const eventRegistrationSchema = new mongoose.Schema({
   event: {
@@ -41,6 +41,19 @@ const eventRegistrationSchema = new mongoose.Schema({
     enum: ['registered', 'attended', 'cancelled'],
     default: 'registered'
   },
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'paid', 'failed'],
+    default: 'pending'
+  },
+  paymentId: {
+    type: String,
+    default: null
+  },
+  orderId: {
+    type: String,
+    default: null
+  },
   created_at: {
     type: Date,
     default: Date.now
@@ -51,5 +64,8 @@ const eventRegistrationSchema = new mongoose.Schema({
 eventRegistrationSchema.index({ event: 1, email: 1 });
 eventRegistrationSchema.index({ teamName: 1 });
 eventRegistrationSchema.index({ created_at: -1 });
+eventRegistrationSchema.index({ paymentStatus: 1 });
 
-module.exports = mongoose.model('EventRegistration', eventRegistrationSchema);
+const EventRegistration = mongoose.model('EventRegistration', eventRegistrationSchema);
+
+export default EventRegistration;

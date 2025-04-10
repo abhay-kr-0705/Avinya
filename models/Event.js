@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const registrationSchema = new mongoose.Schema({
   user: {
@@ -48,28 +48,20 @@ const eventSchema = new mongoose.Schema({
   eventType: {
     type: String,
     enum: ['individual', 'group'],
-    default: 'individual'
+    required: [true, 'Please specify event type']
   },
-  fee: {
+  maxParticipants: {
     type: Number,
-    default: 0
+    required: [true, 'Please specify maximum participants']
   },
-  maxTeamSize: {
-    type: Number,
-    default: 1
+  registrationDeadline: {
+    type: Date,
+    required: [true, 'Please specify registration deadline']
   },
-  thumbnail: {
-    type: String,
-    default: ''
+  image: {
+    type: String
   },
-  rulebook: {
-    type: String,
-    default: ''
-  },
-  registrations: {
-    type: [registrationSchema],
-    default: []
-  },
+  registrations: [registrationSchema],
   created_at: {
     type: Date,
     default: Date.now
@@ -102,4 +94,6 @@ eventSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('Event', eventSchema);
+const Event = mongoose.model('Event', eventSchema);
+
+export default Event;

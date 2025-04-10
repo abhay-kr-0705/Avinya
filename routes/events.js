@@ -1,9 +1,10 @@
-const express = require('express');
+import express from 'express';
+import Event from '../models/Event.js';
+import EventRegistration from '../models/EventRegistration.js';
+import { protect, authorize } from '../middleware/auth.js';
+import { sendEventConfirmation } from '../utils/email.js';
+
 const router = express.Router();
-const Event = require('../models/Event');
-const EventRegistration = require('../models/EventRegistration');
-const { protect, authorize } = require('../middleware/auth');
-const { sendEventConfirmation } = require('../utils/email');
 
 // Get user's registrations - IMPORTANT: This must come before other routes
 router.get('/registrations', async (req, res) => {
@@ -149,7 +150,10 @@ router.post('/:id/register', async (req, res) => {
     });
 
     if (existingReg) {
-      return res.status(400).json({ message: 'Already registered for this event with this email' });
+      return res.status(400).json({ 
+        message: 'Already registered for this event',
+        registration: existingReg
+      });
     }
 
     const registration = await EventRegistration.create({
@@ -159,7 +163,10 @@ router.post('/:id/register', async (req, res) => {
       registration_no: req.body.registration_no,
       mobile_no: req.body.mobile_no,
       semester: req.body.semester,
-      status: 'registered'
+      teamName: req.body.teamName,
+      isLeader: req.body.isLeader || false,
+      status: 'registered',
+      paymentStatus: event.fee > 0 ? 'pending' : 'paid'
     });
 
     // Send confirmation email
@@ -180,6 +187,51 @@ router.post('/:id/register', async (req, res) => {
       return res.status(400).json({ message: err.message });
     }
     res.status(500).json({ message: 'Error registering for event' });
+  }
+});
+
+// Edit registration
+router.put('/:eventId/registrations/:registrationId', async (req, res) => {
+  try {
+    const { eventId, registrationId } = req.params;
+    
+    // Find the registration
+    const registration = await EventRegistration.findOne({
+      _id: registrationId,
+      event: eventId
+    });
+
+    if (!registration) {
+      return res.status(404).json({ message: 'Registration not found' });
+    }
+
+    // Update allowed fields
+    const allowedUpdates = ['name', 'mobile_no', 'semester', 'teamName'];
+    const updates = {};
+    
+    allowedUpdates.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    // Update the registration
+    const updatedRegistration = await EventRegistration.findByIdAndUpdate(
+      registrationId,
+      updates,
+      { new: true, runValidators: true }
+    );
+
+    res.json({
+      message: 'Registration updated successfully',
+      registration: updatedRegistration
+    });
+  } catch (err) {
+    console.error('Error updating registration:', err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ message: err.message });
+    }
+    res.status(500).json({ message: 'Error updating registration' });
   }
 });
 
@@ -270,4 +322,4 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
   }
 });
 
-module.exports = router;
+export default router;
