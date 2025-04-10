@@ -1,9 +1,9 @@
 {
-<<<<<<< HEAD
+  "name": "genx-project",
+  "version": "1.0.0",
+  "description": "GenX Club Website with Frontend and Backend",
   "homepage": "https://abhay-kr-0705.github.io/GenX-2",
-  "name": "genx-now-website",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "start": "node server.js",
+    "dev:server": "nodemon server.js"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.0",
@@ -22,12 +24,23 @@
     "@supabase/supabase-js": "^2.39.3",
     "antd": "^5.23.3",
     "axios": "^1.7.9",
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
     "browser-image-compression": "^2.0.2",
     "cloudinary": "^1.41.3",
+    "cors": "^2.8.5",
     "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-fileupload": "^1.5.1",
     "framer-motion": "^12.0.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.344.0",
+    "mongoose": "^7.8.6",
+    "multer": "^1.4.5-lts.1",
     "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^6.9.16",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.5.1",
@@ -54,35 +67,10 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "gh-pages": "^6.1.1",
     "json-server": "^1.0.0-beta.3",
+    "nodemon": "^2.0.22",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.4.2",
     "vite": "^5.1.4"
-=======
-  "name": "genx-backend",
-  "version": "1.0.0",
-  "description": "Backend for GenX Club Website",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
-  },
-  "dependencies": {
-    "bcrypt": "^5.1.1",
-    "bcryptjs": "^2.4.3",
-    "cloudinary": "^2.5.1",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "express-fileupload": "^1.5.1",
-    "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^7.8.6",
-    "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.9.16"
-  },
-  "devDependencies": {
-    "nodemon": "^2.0.22"
->>>>>>> aeba8ecda8e62703c17c693f4c172c562b22984e
   }
 }

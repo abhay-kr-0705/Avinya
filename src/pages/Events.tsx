@@ -25,11 +25,13 @@ interface Event {
 
 interface Registration {
   id: string;
-  eventId: string;
-  userId: string;
+  event: string;
+  email: string;
   status: 'pending' | 'confirmed' | 'cancelled';
-  createdAt: string;
-  updatedAt: string;
+  paymentStatus: 'pending' | 'paid';
+  created_at: string;
+  teamName?: string;
+  isLeader?: boolean;
 }
 
 const Events = () => {
@@ -192,7 +194,18 @@ const Events = () => {
         navigate('/login', { state: { from: `/events/${eventId}/register` } });
         return;
       }
+
+      // Check if user is already registered
+      const existingRegistration = registrations.find(reg => reg.event === eventId);
+      if (existingRegistration) {
+        // If already registered, navigate to edit page
+        navigate(`/events/${eventId}/edit`, { 
+          state: { registration: existingRegistration } 
+        });
+        return;
+      }
       
+      // If not registered, navigate to registration page
       navigate(`/events/${eventId}/register`);
     } catch (err) {
       handleError(err);
@@ -464,38 +477,35 @@ const Events = () => {
                       </div>
                     </div>
 
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => handleViewMore(event.id)}
-                        className="secondary-button flex-1 flex items-center justify-center"
-                      >
-                        <Info className="w-4 h-4 mr-1.5" />
-                        View Details
-                      </button>
-                      
+                    <div className="mt-4 flex justify-between items-center">
                       {event.type === 'upcoming' && (
                         <>
-                          {registrations.some(reg => reg.eventId === event.id) ? (
-                            <div className="flex-1 flex items-center justify-center gap-2 text-green-600 font-medium">
-                              <span>Registered</span>
-                              <button
-                                onClick={() => navigate(`/events/${event.id}/register`)}
-                                className="text-primary-600 hover:text-primary-700 transition-colors"
-                                title="Edit Registration"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            </div>
+                          {registrations.find(reg => reg.event === event.id) ? (
+                            <button
+                              onClick={() => handleRegister(event.id)}
+                              className="flex items-center gap-2 px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                              Edit Registration
+                            </button>
                           ) : (
                             <button
                               onClick={() => handleRegister(event.id)}
-                              className="primary-button flex-1"
+                              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                             >
+                              <User className="w-4 h-4" />
                               Register Now
                             </button>
                           )}
                         </>
                       )}
+                      <button
+                        onClick={() => handleViewMore(event.id)}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        <Info className="w-4 h-4" />
+                        View Details
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -600,7 +610,7 @@ const Events = () => {
               <div className="flex justify-end gap-3">
                 {selectedEvent.type === 'upcoming' && (
                   <>
-                    {registrations.some(reg => reg.eventId === selectedEvent.id) ? (
+                    {registrations.some(reg => reg.event === selectedEvent.id) ? (
                       <div className="flex items-center gap-2 text-green-600 font-medium">
                         <span>Registered</span>
                         <button
