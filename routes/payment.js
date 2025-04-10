@@ -16,6 +16,8 @@ router.post('/create-order', protect, async (req, res) => {
   try {
     const { eventId, registrationId, amount } = req.body;
 
+    console.log('Creating payment order:', { eventId, registrationId, amount });
+
     if (!eventId || !registrationId || !amount) {
       return res.status(400).json({
         success: false,
@@ -48,7 +50,11 @@ router.post('/create-order', protect, async (req, res) => {
       }
     };
 
+    console.log('Razorpay options:', options);
+
     const order = await razorpay.orders.create(options);
+
+    console.log('Razorpay order created:', order);
 
     res.json({
       success: true,
@@ -74,6 +80,13 @@ router.post('/verify', protect, async (req, res) => {
       eventId,
       registrationId
     } = req.body;
+
+    console.log('Verifying payment:', { 
+      razorpay_order_id, 
+      razorpay_payment_id, 
+      eventId, 
+      registrationId 
+    });
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !eventId || !registrationId) {
       return res.status(400).json({
@@ -110,11 +123,14 @@ router.post('/verify', protect, async (req, res) => {
       registration.status = 'confirmed';
       await registration.save();
 
+      console.log('Payment verified and registration confirmed:', registration._id);
+
       res.json({
         success: true,
         message: 'Payment verified and registration confirmed successfully'
       });
     } else {
+      console.error('Invalid payment signature');
       res.status(400).json({
         success: false,
         message: 'Invalid payment signature'

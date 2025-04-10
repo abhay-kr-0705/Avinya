@@ -38,12 +38,12 @@ const eventRegistrationSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['registered', 'attended', 'cancelled'],
-    default: 'registered'
+    enum: ['pending', 'confirmed', 'cancelled'],
+    default: 'pending'
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid', 'failed'],
+    enum: ['pending', 'completed', 'failed'],
     default: 'pending'
   },
   paymentId: {

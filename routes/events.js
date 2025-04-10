@@ -155,6 +155,7 @@ router.post('/:id/register', async (req, res) => {
       });
     }
 
+    // Create registration with pending status
     const registration = await EventRegistration.create({
       event: req.params.id,
       name: req.body.name,
@@ -164,8 +165,8 @@ router.post('/:id/register', async (req, res) => {
       semester: req.body.semester,
       teamName: req.body.teamName,
       isLeader: req.body.isLeader || false,
-      status: 'registered',
-      paymentStatus: event.fee > 0 ? 'pending' : 'paid'
+      status: 'pending', // Set initial status to pending
+      paymentStatus: event.fee > 0 ? 'pending' : 'completed' // Set payment status based on event fee
     });
 
     // Send confirmation email
@@ -177,7 +178,7 @@ router.post('/:id/register', async (req, res) => {
     }
 
     res.status(201).json({
-      message: 'Successfully registered for the event',
+      message: 'Registration created successfully. Payment required to confirm registration.',
       registration
     });
   } catch (err) {
