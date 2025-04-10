@@ -1,10 +1,9 @@
-import express from 'express';
-import Razorpay from 'razorpay';
-import crypto from 'crypto';
-import { protect } from '../middleware/auth.js';
-import EventRegistration from '../models/EventRegistration.js';
-
+const express = require('express');
 const router = express.Router();
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
+const { protect } = require('../middleware/auth');
+const EventRegistration = require('../models/EventRegistration');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -102,4 +101,4 @@ router.post('/verify', protect, async (req, res) => {
   }
 });
 
-export default router; 
+module.exports = router; 

@@ -1,86 +1,28 @@
 {
-  "name": "genx-project",
+  "name": "genx-backend",
   "version": "1.0.0",
-<<<<<<< HEAD
   "description": "Backend for GenX Club Website",
   "main": "server.js",
-=======
-  "description": "GenX Club Website with Frontend and Backend",
-  "homepage": "https://abhay-kr-0705.github.io/GenX-2",
-  "private": true,
->>>>>>> bc0c765ac3c00a2286f0e04c6c6590fff26b47da
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist",
     "start": "node server.js",
-    "dev:server": "nodemon server.js"
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.6.0",
-    "@emailjs/browser": "^4.4.1",
-    "@radix-ui/react-dialog": "^1.1.4",
-    "@react-three/drei": "^9.92.7",
-    "@react-three/fiber": "^8.14.5",
-    "@supabase/supabase-js": "^2.39.3",
-    "antd": "^5.23.3",
-    "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
-    "browser-image-compression": "^2.0.2",
-    "cloudinary": "^1.41.3",
+    "cloudinary": "^2.5.1",
     "cors": "^2.8.5",
-    "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-fileupload": "^1.5.1",
-    "framer-motion": "^12.0.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "lucide-react": "^0.344.0",
     "mongoose": "^7.8.6",
     "multer": "^1.4.5-lts.1",
-<<<<<<< HEAD
     "nodemailer": "^6.9.16",
     "razorpay": "^2.9.6"
-=======
-    "multer-storage-cloudinary": "^4.0.0",
-    "nodemailer": "^6.9.16",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-hot-toast": "^2.5.1",
-    "react-icons": "^5.4.0",
-    "react-modal": "^3.16.3",
-    "react-router-dom": "^6.22.3",
-    "react-swipeable": "^7.0.2",
-    "react-toastify": "^11.0.3",
-    "recharts": "^2.12.2",
-    "three": "^0.175.0",
-    "zustand": "^5.0.3"
->>>>>>> bc0c765ac3c00a2286f0e04c6c6590fff26b47da
   },
   "devDependencies": {
-    "@eslint/js": "^9.9.1",
-    "@types/react": "^18.3.5",
-    "@types/react-dom": "^18.3.0",
-    "@types/three": "^0.175.0",
-    "@typescript-eslint/eslint-plugin": "^7.1.0",
-    "@typescript-eslint/parser": "^7.1.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.17",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.5",
-    "gh-pages": "^6.1.1",
-    "json-server": "^1.0.0-beta.3",
-    "nodemon": "^2.0.22",
-    "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.4.2",
-    "vite": "^5.1.4"
+    "nodemon": "^2.0.22"
   }
 }

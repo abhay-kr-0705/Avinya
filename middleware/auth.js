@@ -1,7 +1,7 @@
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
-export const protect = async (req, res, next) => {
+exports.protect = async (req, res, next) => {
   try {
     let token;
     
@@ -25,7 +25,7 @@ export const protect = async (req, res, next) => {
   }
 };
 
-export const authorize = (...roles) => {
+exports.authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ 

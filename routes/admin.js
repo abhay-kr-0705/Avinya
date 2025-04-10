@@ -1,10 +1,9 @@
-import express from 'express';
-import User from '../models/User.js';
-import Event from '../models/Event.js';
-import EventRegistration from '../models/EventRegistration.js';
-import { protect, authorize } from '../middleware/auth.js';
-
+const express = require('express');
 const router = express.Router();
+const User = require('../models/User');
+const Event = require('../models/Event');
+const EventRegistration = require('../models/EventRegistration');
+const { protect, authorize } = require('../middleware/auth');
 
 // Error handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>
@@ -288,4 +287,4 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
   }
 }));
 
-export default router;
+module.exports = router;

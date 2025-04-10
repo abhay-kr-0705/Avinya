@@ -1,12 +1,11 @@
-import express from 'express';
-import Gallery from '../models/Gallery.js';
-import { protect } from '../middleware/auth.js';
-import multer from 'multer';
-import { uploadToCloudinary, cloudinary } from '../utils/cloudinary.js';
-import fs from 'fs';
-import path from 'path';
-
+const express = require('express');
 const router = express.Router();
+const Gallery = require('../models/Gallery');
+const { protect } = require('../middleware/auth');
+const multer = require('multer');
+const { uploadToCloudinary, cloudinary } = require('../utils/cloudinary');
+const fs = require('fs');
+const path = require('path');
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -400,4 +399,4 @@ router.delete('/:id', protect, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

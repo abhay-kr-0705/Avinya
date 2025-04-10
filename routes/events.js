@@ -1,10 +1,9 @@
-import express from 'express';
-import Event from '../models/Event.js';
-import EventRegistration from '../models/EventRegistration.js';
-import { protect, authorize } from '../middleware/auth.js';
-import { sendEventConfirmation } from '../utils/email.js';
-
+const express = require('express');
 const router = express.Router();
+const Event = require('../models/Event');
+const EventRegistration = require('../models/EventRegistration');
+const { protect, authorize } = require('../middleware/auth');
+const { sendEventConfirmation } = require('../utils/email');
 
 // Get user's registrations - IMPORTANT: This must come before other routes
 router.get('/registrations', async (req, res) => {
@@ -322,4 +321,4 @@ router.delete('/:id', protect, authorize('admin', 'superadmin'), async (req, res
   }
 });
 
-export default router;
+module.exports = router;

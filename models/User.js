@@ -1,17 +1,17 @@
-import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Please provide a name'],
+    required: [true, 'Name is required'],
     trim: true,
     minlength: [2, 'Name must be at least 2 characters long'],
     maxlength: [50, 'Name cannot be more than 50 characters']
   },
   email: {
     type: String,
-    required: [true, 'Please provide an email'],
+    required: [true, 'Email is required'],
     unique: true,
     trim: true,
     lowercase: true,
@@ -22,30 +22,30 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Please provide a password'],
+    required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters long'],
     select: false
   },
   registration_no: {
     type: String,
-    required: [true, 'Please provide a registration number'],
+    required: [true, 'Registration number is required'],
     unique: true,
     trim: true,
     uppercase: true
   },
   branch: {
     type: String,
-    required: [true, 'Please provide a branch'],
+    required: [true, 'Branch is required'],
     trim: true
   },
   semester: {
     type: String,
-    required: [true, 'Please provide a semester'],
+    required: [true, 'Semester is required'],
     trim: true
   },
   mobile: {
     type: String,
-    required: [true, 'Please provide a mobile number'],
+    required: [true, 'Mobile number is required'],
     trim: true,
     validate: {
       validator: function(v) {
@@ -110,6 +110,4 @@ userSchema.methods.matchPassword = async function(enteredPassword) {
   }
 };
 
-const User = mongoose.model('User', userSchema);
-
-export default User;
+module.exports = mongoose.model('User', userSchema);

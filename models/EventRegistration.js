@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const eventRegistrationSchema = new mongoose.Schema({
   event: {
@@ -66,6 +66,4 @@ eventRegistrationSchema.index({ teamName: 1 });
 eventRegistrationSchema.index({ created_at: -1 });
 eventRegistrationSchema.index({ paymentStatus: 1 });
 
-const EventRegistration = mongoose.model('EventRegistration', eventRegistrationSchema);
-
-export default EventRegistration;
+module.exports = mongoose.model('EventRegistration', eventRegistrationSchema);

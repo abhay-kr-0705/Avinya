@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -8,7 +8,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-export const sendEventConfirmation = async (to, event, registration) => {
+exports.sendEventConfirmation = async (to, event, registration) => {
   const mailOptions = {
     from: process.env.SMTP_USER,
     to,

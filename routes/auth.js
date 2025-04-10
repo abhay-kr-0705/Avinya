@@ -1,9 +1,8 @@
-import express from 'express';
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-import { protect } from '../middleware/auth.js';
-
+const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const { protect } = require('../middleware/auth');
 
 // Register user
 router.post('/register', async (req, res) => {
@@ -309,4 +308,4 @@ router.put('/change-password', protect, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

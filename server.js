@@ -1,17 +1,17 @@
-import express from 'express';
-import mongoose from 'mongoose';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import helmet from 'helmet'; // Import Helmet for security headers
-import crypto from 'crypto';
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const helmet = require('helmet'); // Import Helmet for security headers
+const crypto = require('crypto');
 
 // Import routes
-import authRoutes from './routes/auth.js';
-import eventRoutes from './routes/events.js';
-import resourceRoutes from './routes/resources.js';
-import galleryRoutes from './routes/gallery.js';
-import adminRoutes from './routes/admin.js';
-import paymentRoutes from './routes/payment.js';
+const authRoutes = require('./routes/auth');
+const eventRoutes = require('./routes/events');
+const resourceRoutes = require('./routes/resources');
+const galleryRoutes = require('./routes/gallery');
+const adminRoutes = require('./routes/admin');
+const paymentRoutes = require('./routes/payment');
 
 // Load environment variables
 dotenv.config();
@@ -20,24 +20,12 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'https://genspark-techfest-sec-sasaram.netlify.app',
-      'https://avinya-backend.onrender.com',
-      'http://localhost:5173',
-      'http://localhost:3000'
-    ];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);
-    } else {
-      console.log('Blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: [
+    'https://genspark-techfest-sec-sasaram.netlify.app',
+    'https://avinya-backend.onrender.com',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Requested-With', 'X-Razorpay-Signature'],
@@ -46,30 +34,16 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
-// Apply CORS before any other middleware
+// Apply CORS before other middleware
 app.use(cors(corsOptions));
 
-// Add CORS debugging middleware
-app.use((req, res, next) => {
-  console.log('Request origin:', req.headers.origin);
-  console.log('Request method:', req.method);
-  console.log('Request path:', req.path);
-  next();
-});
-
-// Handle preflight requests
-app.options('*', cors(corsOptions));
-
 // Security Middleware
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginOpenerPolicy: { policy: "unsafe-none" }
-}));
+app.use(helmet()); // Adds security headers
 
 // Additional headers to prevent clickjacking
 app.use((req, res, next) => {
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
+  res.setHeader("X-Frame-Options", "DENY"); // Blocks all iframe embedding
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'"); // No iframe embedding allowed
   next();
 });
 
@@ -141,7 +115,7 @@ async function connectDB() {
     console.log('MongoDB Connected Successfully');
     
     // Test the connection by trying to fetch events
-    const Event = (await import('./models/Event.js')).default;
+    const Event = require('./models/Event');
     const events = await Event.find();
     console.log(`Successfully fetched ${events.length} events from database`);
     events.forEach(event => {
@@ -167,4 +141,4 @@ connectDB().then(() => {
   process.exit(1);
 });
 
-export default app;
+module.exports = app;

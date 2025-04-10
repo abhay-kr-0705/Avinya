@@ -1,8 +1,7 @@
-import express from 'express';
-import Resource from '../models/Resource.js';
-import { protect } from '../middleware/auth.js';
-
+const express = require('express');
 const router = express.Router();
+const Resource = require('../models/Resource');
+const { protect } = require('../middleware/auth');
 
 // @desc    Get all resources
 // @route   GET /api/resources
@@ -92,4 +91,4 @@ router.delete('/:id', protect, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
