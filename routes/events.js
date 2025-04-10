@@ -20,9 +20,26 @@ router.get('/registrations', async (req, res) => {
     const registrationData = registrations
       .filter(reg => reg.event) // Filter out any registrations where event is null
       .map(reg => ({
-        event: reg.event._id,
+        id: reg._id,
+        event: {
+          id: reg.event._id,
+          title: reg.event.title,
+          description: reg.event.description,
+          date: reg.event.date,
+          end_date: reg.event.end_date || reg.event.date,
+          venue: reg.event.venue || 'TBD',
+          fee: reg.event.fee || 0,
+          eventType: reg.event.eventType || 'individual',
+          type: new Date(reg.event.date) > new Date() ? 'upcoming' : 'past'
+        },
+        name: reg.name,
         email: reg.email,
+        registration_no: reg.registration_no,
+        mobile_no: reg.mobile_no,
+        semester: reg.semester,
+        teamName: reg.teamName || null,
         status: reg.status,
+        paymentStatus: reg.paymentStatus,
         created_at: reg.created_at
       }));
 

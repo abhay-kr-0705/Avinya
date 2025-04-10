@@ -30,16 +30,26 @@ router.post('/create-order', protect, async (req, res) => {
     // Check if registration exists and is pending payment
     const registration = await EventRegistration.findOne({
       _id: registrationId,
-      event: eventId,
-      paymentStatus: 'pending'
+      event: eventId
     });
 
     if (!registration) {
       return res.status(404).json({
         success: false,
-        message: 'Registration not found or payment already completed'
+        message: 'Registration not found'
       });
     }
+
+    // If payment is already completed, return existing information
+    if (registration.paymentStatus === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment already completed for this registration'
+      });
+    }
+
+    // Verify that we are using the correct Razorpay API key
+    console.log('Using Razorpay key:', process.env.RAZORPAY_KEY_ID);
 
     const options = {
       amount: amount * 100, // Razorpay expects amount in paise
@@ -52,10 +62,9 @@ router.post('/create-order', protect, async (req, res) => {
       }
     };
 
-    console.log('Razorpay options:', options);
+    console.log('Razorpay order options:', options);
 
     const order = await razorpay.orders.create(options);
-
     console.log('Razorpay order created:', order);
 
     res.json({
