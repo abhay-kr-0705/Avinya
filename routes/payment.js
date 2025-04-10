@@ -14,20 +14,38 @@ const razorpay = new Razorpay({
 // Create payment order
 router.post('/create-order', protect, async (req, res) => {
   try {
-    const { eventId, amount } = req.body;
+    const { eventId, registrationId, amount } = req.body;
 
-    if (!eventId || !amount) {
+    if (!eventId || !registrationId || !amount) {
       return res.status(400).json({
         success: false,
-        message: 'Event ID and amount are required'
+        message: 'Event ID, registration ID and amount are required'
+      });
+    }
+
+    // Check if registration exists and is pending payment
+    const registration = await EventRegistration.findOne({
+      _id: registrationId,
+      event: eventId,
+      paymentStatus: 'pending'
+    });
+
+    if (!registration) {
+      return res.status(404).json({
+        success: false,
+        message: 'Registration not found or payment already completed'
       });
     }
 
     const options = {
       amount: amount * 100, // Razorpay expects amount in paise
       currency: 'INR',
-      receipt: `receipt_${Date.now()}`,
-      payment_capture: 1
+      receipt: `receipt_${registrationId}`,
+      payment_capture: 1,
+      notes: {
+        eventId,
+        registrationId
+      }
     };
 
     const order = await razorpay.orders.create(options);
@@ -73,17 +91,28 @@ router.post('/verify', protect, async (req, res) => {
 
     if (razorpay_signature === expectedSign) {
       // Update registration status
-      const registration = await EventRegistration.findById(registrationId);
-      if (registration) {
-        registration.paymentStatus = 'paid';
-        registration.paymentId = razorpay_payment_id;
-        registration.orderId = razorpay_order_id;
-        await registration.save();
+      const registration = await EventRegistration.findOne({
+        _id: registrationId,
+        event: eventId,
+        paymentStatus: 'pending'
+      });
+
+      if (!registration) {
+        return res.status(404).json({
+          success: false,
+          message: 'Registration not found or payment already completed'
+        });
       }
+
+      registration.paymentStatus = 'completed';
+      registration.paymentId = razorpay_payment_id;
+      registration.orderId = razorpay_order_id;
+      registration.status = 'confirmed';
+      await registration.save();
 
       res.json({
         success: true,
-        message: 'Payment verified successfully'
+        message: 'Payment verified and registration confirmed successfully'
       });
     } else {
       res.status(400).json({
