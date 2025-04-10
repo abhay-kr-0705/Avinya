@@ -50,8 +50,27 @@ app.use(cors(corsOptions));
 // Additional CORS headers for preflight requests
 app.options('*', cors(corsOptions));
 
+// CORS middleware to ensure headers are set for all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && corsOptions.origin(origin, (err, allowed) => allowed)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', corsOptions.methods.join(','));
+  res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send();
+  }
+  next();
+});
+
 // Security Middleware
-app.use(helmet()); // Adds security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "unsafe-none" }
+}));
 
 // Additional headers to prevent clickjacking
 app.use((req, res, next) => {
