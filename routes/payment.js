@@ -4,6 +4,8 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { protect } = require('../middleware/auth');
 const EventRegistration = require('../models/EventRegistration');
+const Event = require('../models/Event');
+const { sendEventConfirmation } = require('../utils/email');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -117,11 +119,21 @@ router.post('/verify', protect, async (req, res) => {
         });
       }
 
+      // Update both payment and registration status
       registration.paymentStatus = 'completed';
       registration.paymentId = razorpay_payment_id;
       registration.orderId = razorpay_order_id;
-      registration.status = 'confirmed';
+      registration.status = 'confirmed'; // Confirm registration after successful payment
       await registration.save();
+
+      // Send confirmation email after successful payment
+      try {
+        const event = await Event.findById(eventId);
+        await sendEventConfirmation(registration.email, event, registration);
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+        // Don't fail the payment verification if email fails
+      }
 
       console.log('Payment verified and registration confirmed:', registration._id);
 
@@ -136,12 +148,12 @@ router.post('/verify', protect, async (req, res) => {
         message: 'Invalid payment signature'
       });
     }
-  } catch (error) {
-    console.error('Error verifying payment:', error);
+  } catch (err) {
+    console.error('Error verifying payment:', err);
     res.status(500).json({
       success: false,
       message: 'Error verifying payment',
-      error: error.message
+      error: err.message
     });
   }
 });

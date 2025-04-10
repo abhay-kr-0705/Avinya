@@ -165,20 +165,24 @@ router.post('/:id/register', async (req, res) => {
       semester: req.body.semester,
       teamName: req.body.teamName,
       isLeader: req.body.isLeader || false,
-      status: 'pending', // Set initial status to pending
+      status: event.fee > 0 ? 'pending' : 'confirmed', // Only confirm if no payment needed
       paymentStatus: event.fee > 0 ? 'pending' : 'completed' // Set payment status based on event fee
     });
 
-    // Send confirmation email
-    try {
-      await sendEventConfirmation(req.body.email, event, registration);
-    } catch (emailError) {
-      console.error('Error sending confirmation email:', emailError);
-      // Don't fail the registration if email fails
+    // Send confirmation email only if no payment is required
+    if (event.fee === 0) {
+      try {
+        await sendEventConfirmation(req.body.email, event, registration);
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+        // Don't fail the registration if email fails
+      }
     }
 
     res.status(201).json({
-      message: 'Registration created successfully. Payment required to confirm registration.',
+      message: event.fee > 0 
+        ? 'Registration created successfully. Payment required to confirm registration.'
+        : 'Registration confirmed successfully.',
       registration
     });
   } catch (err) {
