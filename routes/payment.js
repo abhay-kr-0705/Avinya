@@ -18,7 +18,13 @@ router.post('/create-order', protect, async (req, res) => {
   try {
     const { eventId, registrationId, amount } = req.body;
 
-    console.log('Creating payment order:', { eventId, registrationId, amount });
+    console.log('Creating payment order with params:', { 
+      eventId, 
+      registrationId, 
+      amount, 
+      userId: req.user?._id,
+      razorpayKey: process.env.RAZORPAY_KEY_ID
+    });
 
     if (!eventId || !registrationId || !amount) {
       return res.status(400).json({
@@ -34,6 +40,7 @@ router.post('/create-order', protect, async (req, res) => {
     });
 
     if (!registration) {
+      console.error(`Registration not found: ${registrationId} for event ${eventId}`);
       return res.status(404).json({
         success: false,
         message: 'Registration not found'
@@ -42,6 +49,7 @@ router.post('/create-order', protect, async (req, res) => {
 
     // If payment is already completed, return existing information
     if (registration.paymentStatus === 'completed') {
+      console.log(`Payment already completed for registration: ${registrationId}`);
       return res.status(400).json({
         success: false,
         message: 'Payment already completed for this registration'
@@ -49,10 +57,19 @@ router.post('/create-order', protect, async (req, res) => {
     }
 
     // Verify that we are using the correct Razorpay API key
-    console.log('Using Razorpay key:', process.env.RAZORPAY_KEY_ID);
+    console.log('Using Razorpay keys:', {
+      key_id: process.env.RAZORPAY_KEY_ID?.substring(0, 10) + '...',
+      key_secret: process.env.RAZORPAY_KEY_SECRET ? 'Valid' : 'Missing'
+    });
+
+    // Initialize the Razorpay instance with the latest keys
+    const razorpayClient = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET
+    });
 
     const options = {
-      amount: amount * 100, // Razorpay expects amount in paise
+      amount: Math.round(amount * 100), // Razorpay expects amount in paise
       currency: 'INR',
       receipt: `receipt_${registrationId}`,
       payment_capture: 1,
@@ -64,19 +81,28 @@ router.post('/create-order', protect, async (req, res) => {
 
     console.log('Razorpay order options:', options);
 
-    const order = await razorpay.orders.create(options);
-    console.log('Razorpay order created:', order);
+    try {
+      const order = await razorpayClient.orders.create(options);
+      console.log('Razorpay order created successfully:', order);
 
-    res.json({
-      success: true,
-      order
-    });
+      res.json({
+        success: true,
+        order
+      });
+    } catch (razorpayError) {
+      console.error('Razorpay API Error:', razorpayError);
+      res.status(500).json({
+        success: false,
+        message: 'Error communicating with payment gateway',
+        error: razorpayError.message || 'Unknown Razorpay error'
+      });
+    }
   } catch (error) {
     console.error('Error creating payment order:', error);
     res.status(500).json({
       success: false,
       message: 'Error creating payment order',
-      error: error.message
+      error: error.message || 'Unknown server error'
     });
   }
 });
@@ -163,6 +189,47 @@ router.post('/verify', protect, async (req, res) => {
       success: false,
       message: 'Error verifying payment',
       error: err.message
+    });
+  }
+});
+
+// Test Razorpay connectivity
+router.get('/test-connection', async (req, res) => {
+  try {
+    console.log('Testing Razorpay connection with keys:', {
+      key_id: process.env.RAZORPAY_KEY_ID?.substring(0, 10) + '...',
+      key_secret: process.env.RAZORPAY_KEY_SECRET ? 'Valid' : 'Missing'
+    });
+
+    // Initialize a fresh instance
+    const testRazorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET
+    });
+
+    // Try to create a test order with minimum amount
+    const testOrder = await testRazorpay.orders.create({
+      amount: 100, // 1 rupee in paise
+      currency: 'INR',
+      receipt: 'test_receipt_' + Date.now(),
+      payment_capture: 0,
+      notes: { test: 'true' }
+    });
+
+    console.log('Test order created successfully:', testOrder);
+
+    res.json({
+      success: true,
+      message: 'Razorpay connection successful',
+      testOrder
+    });
+  } catch (error) {
+    console.error('Razorpay connection test failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Razorpay connection test failed',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
