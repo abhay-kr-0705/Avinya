@@ -287,34 +287,79 @@ router.delete('/events/:id', asyncHandler(async (req, res) => {
   }
 }));
 
-// Clear all registrations (Superadmin only)
-router.delete('/registrations/clear-all', protect, authorize('superadmin'), asyncHandler(async (req, res) => {
+// Clear all registrations (Admin and Superadmin only)
+router.delete('/registrations/clear-all', protect, authorize('admin', 'superadmin'), asyncHandler(async (req, res) => {
   try {
     console.log('Admin request to clear all registrations received');
+    console.log('Request user:', req.user);
     
-    // Delete all registration documents
-    const deleteResult = await EventRegistration.deleteMany({});
-    console.log(`Deleted ${deleteResult.deletedCount} registration documents`);
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      console.error(`Permission denied: User ${req.user.email} (${req.user.role}) attempted to clear all registrations`);
+      return res.status(403).json({
+        success: false,
+        message: 'Permission denied: Only admins can clear all registrations'
+      });
+    }
     
-    // Clear registrations array from all events
-    const updateResult = await Event.updateMany(
-      {}, 
-      { $set: { registrations: [] } }
-    );
-    console.log(`Updated ${updateResult.modifiedCount} events to remove registrations`);
+    console.log('Checking if EventRegistration model exists:', !!EventRegistration);
+    console.log('Checking if Event model exists:', !!Event);
+    
+    // Count registrations before deletion for verification
+    let registrationCount = 0;
+    try {
+      registrationCount = await EventRegistration.countDocuments({});
+      console.log(`Found ${registrationCount} registration documents`);
+    } catch (countErr) {
+      console.error('Error counting registrations:', countErr);
+    }
+    
+    // Delete all registration documents with error handling
+    let deleteResult;
+    try {
+      deleteResult = await EventRegistration.deleteMany({});
+      console.log(`Deleted ${deleteResult.deletedCount} registration documents`);
+    } catch (deleteErr) {
+      console.error('Error deleting registrations:', deleteErr);
+      return res.status(500).json({
+        success: false,
+        message: 'Error deleting registrations',
+        error: deleteErr.message
+      });
+    }
+    
+    // Clear registrations array from all events with error handling
+    let updateResult;
+    try {
+      updateResult = await Event.updateMany(
+        {}, 
+        { $set: { registrations: [] } }
+      );
+      console.log(`Updated ${updateResult.modifiedCount} events to remove registrations`);
+    } catch (updateErr) {
+      console.error('Error updating events:', updateErr);
+      return res.status(500).json({
+        success: false,
+        message: 'Error updating events. Registrations were deleted but events were not updated.',
+        error: updateErr.message,
+        partialSuccess: true,
+        deletedCount: deleteResult.deletedCount
+      });
+    }
     
     res.json({
       success: true,
       message: 'All registrations have been cleared successfully',
       deletedCount: deleteResult.deletedCount,
-      eventsUpdated: updateResult.modifiedCount
+      eventsUpdated: updateResult.modifiedCount,
+      originalCount: registrationCount
     });
   } catch (err) {
     console.error('Error clearing all registrations:', err);
     res.status(500).json({
       success: false,
       message: 'Error clearing registrations',
-      error: err.message
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 }));
