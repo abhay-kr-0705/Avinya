@@ -62,6 +62,10 @@ const eventSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  rulebook: {
+    type: String,
+    default: ''
+  },
   registrations: {
     type: [registrationSchema],
     default: []
