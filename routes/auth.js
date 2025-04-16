@@ -196,6 +196,73 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Refresh token endpoint
+router.post('/refresh-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+    
+    try {
+      // Verify the token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      // Find user
+      const user = await User.findById(decoded.id);
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
+      // Create new token
+      const newToken = jwt.sign(
+        { id: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+      
+      res.json({
+        success: true,
+        token: newToken,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          registration_no: user.registration_no,
+          branch: user.branch,
+          semester: user.semester,
+          mobile: user.mobile,
+          isAdmin: user.isAdmin,
+          role: user.role,
+          isEmailVerified: true,
+          status: 'active'
+        }
+      });
+    } catch (jwtError) {
+      // If token verification fails
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token',
+        error: process.env.NODE_ENV === 'development' ? jwtError.message : 'Authentication error'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 // Get current user
 router.get('/me', protect, async (req, res) => {
   try {

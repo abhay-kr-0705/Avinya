@@ -7,6 +7,7 @@ import { handleError } from '../utils/errorHandling';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
 import { toast } from 'react-hot-toast';
+import axios from 'axios';
 
 interface Event {
   id: string;
@@ -41,7 +42,7 @@ const Events = () => {
   const [filter, setFilter] = useState('all'); // 'all', 'upcoming', 'past'
   const navigate = useNavigate();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const { user } = useAuth();
+  const { user, checkAuthSilently } = useAuth();
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [thumbnailErrors, setThumbnailErrors] = useState<Record<string, boolean>>({});
@@ -110,80 +111,80 @@ const Events = () => {
   };
 
   useEffect(() => {
-    const fetchEvents = async () => {
+    const fetchData = async () => {
+      setLoading(true);
+      
+      // Silently check authentication status before fetching data
+      await checkAuthSilently();
+      
       try {
-        setLoading(true);
-        const data = await getEvents();
+        const allEvents = await getEvents();
+        setEvents(allEvents || []);
         
-        // Normalize all events before setting state
-        if (Array.isArray(data)) {
-          console.log('Normalizing events array:', data.length, 'events');
-          const normalizedEvents = data.map(normalizeEvent);
-          
-          // Sort events by date - upcoming first, then by most recent date
-          normalizedEvents.sort((a, b) => {
-            // First, sort by upcoming/past (upcoming events first)
-            if (a.type === 'upcoming' && b.type === 'past') return -1;
-            if (a.type === 'past' && b.type === 'upcoming') return 1;
-            
-            // For upcoming events, sort by closest date first
-            if (a.type === 'upcoming' && b.type === 'upcoming') {
-              return new Date(a.date).getTime() - new Date(b.date).getTime();
-            }
-            
-            // For past events, sort by most recent first
-            return new Date(b.date).getTime() - new Date(a.date).getTime();
-          });
-          
-          setEvents(normalizedEvents);
-        } else {
-          console.error('Expected array of events but got:', typeof data);
-          setEvents([]);
+        if (user) {
+          try {
+            const userRegs = await getUserRegistrations(user.email);
+            setRegistrations(userRegs || []);
+          } catch (error) {
+            console.error('Error fetching registrations:', error);
+          }
         }
-        
-        // Reset thumbnail errors
-        setThumbnailErrors({});
-        
-        setError(null);
       } catch (err) {
         handleError(err);
-        setError('Failed to load events. Please try again later.');
+        setError('Failed to fetch events. Please try again later.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchEvents();
-    if (user) {
-      fetchUserRegistrations();
-    }
+    fetchData();
   }, [user]);
-
-  const fetchUserRegistrations = async () => {
-    if (!user) return;
-    try {
-      const data = await getUserRegistrations(user.email);
-      setRegistrations(data);
-    } catch (err) {
-      console.error('Error fetching user registrations:', err);
-    }
-  };
 
   const handleViewMore = async (eventId: string) => {
     try {
-      const eventData = await getEventById(eventId);
-      if (!eventData) {
-        toast.error('Event not found');
+      // Check authentication first
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Please log in to view event details');
+        navigate('/login', { state: { from: `/events/${eventId}` } });
         return;
       }
+
+      // Show loading toast
+      const loadingToastId = toast.loading('Loading event details...');
       
-      // Normalize the event data before setting state
-      const normalizedEvent = normalizeEvent(eventData);
-      setSelectedEvent(normalizedEvent);
-      setShowModal(true);
+      try {
+        const eventData = await getEventById(eventId);
+        
+        toast.dismiss(loadingToastId);
+        
+        if (!eventData) {
+          toast.error('Event not found');
+          return;
+        }
+        
+        // Normalize the event data before setting state
+        const normalizedEvent = normalizeEvent(eventData);
+        setSelectedEvent(normalizedEvent);
+        setShowModal(true);
+      } catch (err) {
+        toast.dismiss(loadingToastId);
+        
+        // Check if it's an authentication error
+        if (axios.isAxiosError(err) && err.response?.status === 401) {
+          toast.error('Session expired. Please log in again to view event details.');
+          // Clear any expired tokens
+          localStorage.removeItem('token');
+          navigate('/login', { state: { from: `/events/${eventId}` } });
+          return;
+        }
+        
+        handleError(err);
+        toast.error('Failed to load event details');
+      }
     } catch (err) {
       handleError(err);
-      toast.error('Failed to load event details');
+      toast.error('Failed to process your request');
     }
   };
 

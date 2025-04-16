@@ -15,6 +15,7 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 import { handleError } from '../../utils/errorHandling';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DashboardStats {
   totalUsers: number;
@@ -54,6 +55,7 @@ const INITIAL_USERS_TO_SHOW = 7;
 const USERS_PER_LOAD = 5;
 
 const Dashboard = () => {
+  const { user, checkAuthSilently } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     totalEvents: 0,
@@ -80,8 +82,23 @@ const Dashboard = () => {
   });
 
   useEffect(() => {
-    fetchDashboardStats();
-  }, []);
+    const verifyAuth = async () => {
+      const isAuthenticated = await checkAuthSilently();
+      if (!isAuthenticated) {
+        navigate('/login', { state: { from: '/admin' } });
+        return;
+      }
+      
+      if (user && !['admin', 'superadmin'].includes(user.role || '')) {
+        navigate('/unauthorized');
+        return;
+      }
+      
+      fetchDashboardStats();
+    };
+    
+    verifyAuth();
+  }, [user]);
 
   useEffect(() => {
     setVisibleUsers(INITIAL_USERS_TO_SHOW);

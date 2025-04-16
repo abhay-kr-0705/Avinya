@@ -129,13 +129,21 @@ router.get('/', async (req, res) => {
 });
 
 // Get single event
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    res.json(event);
+    
+    // Normalize the response data
+    const normalizedEvent = {
+      ...event.toObject(),
+      id: event._id,
+      _id: event._id
+    };
+
+    res.json(normalizedEvent);
   } catch (err) {
     console.error('Error fetching event:', err);
     res.status(500).json({ message: 'Error fetching event' });

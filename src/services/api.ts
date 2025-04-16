@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
+import { handleError } from '../utils/errorHandling';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -13,14 +14,115 @@ const api = axios.create({
   }
 });
 
-// Add response interceptor for debugging
+// Variable to track if token refresh is in progress
+let isRefreshingToken = false;
+// Store pending requests that should be retried after token refresh
+let pendingRequests: Function[] = [];
+
+// Function to process pending requests
+const processPendingRequests = (token: string | null) => {
+  pendingRequests.forEach(callback => callback(token));
+  pendingRequests = [];
+};
+
+// Add response interceptor with token refresh logic
 api.interceptors.response.use(
   (response) => {
     console.log(`API Response [${response.config.method?.toUpperCase()}] ${response.config.url}:`, response.data);
     return response;
   },
-  (error) => {
+  async (error) => {
     console.error(`API Error [${error.config?.method?.toUpperCase()}] ${error.config?.url}:`, error.response?.data || error.message);
+    
+    const originalRequest = error.config;
+
+    // If we receive a 401 error and we haven't already tried to refresh the token
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshingToken) {
+        // If a refresh is already in progress, queue this request
+        return new Promise(resolve => {
+          pendingRequests.push((token: string) => {
+            if (token) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            resolve(axios(originalRequest));
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshingToken = true;
+
+      try {
+        // Try to refresh the token
+        const storedToken = localStorage.getItem('token');
+        
+        if (!storedToken) {
+          // No token to refresh, clear auth state
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          isRefreshingToken = false;
+          // Redirect to login page if needed
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
+        }
+        
+        // Call the refresh token endpoint
+        try {
+          const response = await axios.post(`${API_URL}/auth/refresh-token`, {
+            token: storedToken
+          });
+          
+          if (response.data.success && response.data.token) {
+            const newToken = response.data.token;
+            
+            // Update the stored token
+            localStorage.setItem('token', newToken);
+            
+            // Update authorization header
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            
+            // Process any pending requests
+            processPendingRequests(newToken);
+            
+            // Retry the original request
+            isRefreshingToken = false;
+            return axios(originalRequest);
+          } else {
+            throw new Error('Failed to refresh token');
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          
+          // Clear auth state
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          
+          // Redirect if needed
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+            window.location.href = '/login';
+          }
+          
+          isRefreshingToken = false;
+          return Promise.reject(error);
+        }
+      } catch (refreshError) {
+        // Token refresh failed
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        isRefreshingToken = false;
+        
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      } finally {
+        isRefreshingToken = false;
+      }
+    }
+    
     return Promise.reject(error);
   }
 );
