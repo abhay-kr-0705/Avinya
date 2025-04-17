@@ -37,7 +37,6 @@ router.get('/registrations', async (req, res) => {
         registration_no: reg.registration_no,
         mobile_no: reg.mobile_no,
         semester: reg.semester,
-        college: reg.college,
         teamName: reg.teamName || null,
         status: reg.status,
         paymentStatus: reg.paymentStatus,
@@ -64,7 +63,7 @@ router.get('/:eventId/registrations', protect, authorize('admin', 'superadmin'),
 
     // Get all registrations for this event
     const registrations = await EventRegistration.find({ event: eventId })
-      .select('name email registration_no mobile_no semester college status created_at')
+      .select('name email registration_no mobile_no semester status created_at')
       .sort({ created_at: -1 });
 
     res.json(registrations);
@@ -159,26 +158,13 @@ router.post('/:id/register', async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    // Validate required fields for main registrant
-    const requiredFields = ['name', 'email', 'registration_no', 'mobile_no', 'semester', 'college'];
+    // Validate required fields
+    const requiredFields = ['name', 'email', 'registration_no', 'mobile_no', 'semester'];
     const missingFields = requiredFields.filter(field => !req.body[field]);
     if (missingFields.length > 0) {
       return res.status(400).json({
         message: `Missing required fields: ${missingFields.join(', ')}`
       });
-    }
-
-    // For group registrations, check if members have required fields too
-    if (req.body.members && req.body.members.length > 0) {
-      for (let i = 0; i < req.body.members.length; i++) {
-        const member = req.body.members[i];
-        const memberMissingFields = requiredFields.filter(field => !member[field]);
-        if (memberMissingFields.length > 0) {
-          return res.status(400).json({
-            message: `Missing required fields for team member ${i + 1}: ${memberMissingFields.join(', ')}`
-          });
-        }
-      }
     }
 
     // Check if already registered with the same email
@@ -194,7 +180,7 @@ router.post('/:id/register', async (req, res) => {
       });
     }
 
-    // Create registration with pending status for team leader
+    // Create registration with pending status
     const registration = await EventRegistration.create({
       event: req.params.id,
       name: req.body.name,
@@ -202,33 +188,11 @@ router.post('/:id/register', async (req, res) => {
       registration_no: req.body.registration_no,
       mobile_no: req.body.mobile_no,
       semester: req.body.semester,
-      college: req.body.college,
       teamName: req.body.teamName,
-      isLeader: true,
+      isLeader: req.body.isLeader || false,
       status: event.fee > 0 ? 'pending' : 'confirmed', // Only confirm if no payment needed
       paymentStatus: event.fee > 0 ? 'pending' : 'completed' // Set payment status based on event fee
     });
-
-    // If this is a group registration, create entries for team members
-    const memberRegistrations = [];
-    if (req.body.members && req.body.members.length > 0) {
-      for (const member of req.body.members) {
-        const memberReg = await EventRegistration.create({
-          event: req.params.id,
-          name: member.name,
-          email: member.email,
-          registration_no: member.registration_no,
-          mobile_no: member.mobile_no,
-          semester: member.semester,
-          college: member.college,
-          teamName: req.body.teamName,
-          isLeader: false,
-          status: event.fee > 0 ? 'pending' : 'confirmed',
-          paymentStatus: event.fee > 0 ? 'pending' : 'completed'
-        });
-        memberRegistrations.push(memberReg);
-      }
-    }
 
     // Send confirmation email only if no payment is required
     if (event.fee === 0) {
@@ -244,8 +208,7 @@ router.post('/:id/register', async (req, res) => {
       message: event.fee > 0 
         ? 'Registration created successfully. Payment required to confirm registration.'
         : 'Registration confirmed successfully.',
-      registration,
-      memberRegistrations: memberRegistrations.length > 0 ? memberRegistrations : undefined
+      registration
     });
   } catch (err) {
     console.error('Error registering for event:', err);

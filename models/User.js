@@ -43,11 +43,6 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Semester is required'],
     trim: true
   },
-  college: {
-    type: String,
-    required: [true, 'College is required'],
-    trim: true
-  },
   mobile: {
     type: String,
     required: [true, 'Mobile number is required'],

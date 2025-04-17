@@ -7,10 +7,10 @@ const { protect } = require('../middleware/auth');
 // Register user
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name, registration_no, branch, semester, mobile, college } = req.body;
+    const { email, password, name, registration_no, branch, semester, mobile } = req.body;
 
     // Validate required fields
-    const requiredFields = ['email', 'password', 'name', 'registration_no', 'branch', 'semester', 'mobile', 'college'];
+    const requiredFields = ['email', 'password', 'name', 'registration_no', 'branch', 'semester', 'mobile'];
     const missingFields = requiredFields.filter(field => !req.body[field]);
     
     if (missingFields.length > 0) {
@@ -54,8 +54,7 @@ router.post('/register', async (req, res) => {
       registration_no,
       branch,
       semester,
-      mobile: mobile.trim(),
-      college
+      mobile: mobile.trim()
     });
 
     // Check if user should be admin
@@ -84,7 +83,6 @@ router.post('/register', async (req, res) => {
         branch: user.branch,
         semester: user.semester,
         mobile: user.mobile,
-        college: user.college,
         isAdmin: user.isAdmin,
         role: user.role
       }
@@ -184,7 +182,6 @@ router.post('/login', async (req, res) => {
         branch: user.branch,
         semester: user.semester,
         mobile: user.mobile,
-        college: user.college,
         isAdmin: user.isAdmin,
         role: user.role
       }
@@ -300,10 +297,8 @@ router.post('/logout', (req, res) => {
 // Update user profile
 router.put('/update-profile', protect, async (req, res) => {
   try {
-    const { name, registration_no, branch, semester, mobile, college } = req.body;
-    
-    // Find user
     const user = await User.findById(req.user.id);
+    
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -311,46 +306,32 @@ router.put('/update-profile', protect, async (req, res) => {
       });
     }
 
-    // Update fields that are provided
-    if (name) user.name = name;
-    if (registration_no) user.registration_no = registration_no;
-    if (branch) user.branch = branch;
-    if (semester) user.semester = semester;
-    if (mobile) user.mobile = mobile.trim();
-    if (college) user.college = college;
+    const updateFields = ['name', 'email', 'registration_no', 'branch', 'semester', 'mobile'];
+    updateFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
+      }
+    });
 
     await user.save();
 
     res.json({
       success: true,
+      message: 'Profile updated successfully',
       user: {
-        id: user._id,
         name: user.name,
         email: user.email,
         registration_no: user.registration_no,
         branch: user.branch,
         semester: user.semester,
-        mobile: user.mobile,
-        college: user.college,
-        isAdmin: user.isAdmin,
-        role: user.role
+        mobile: user.mobile
       }
     });
-  } catch (err) {
-    console.error('Error updating profile:', err);
-    
-    // Handle validation errors
-    if (err.name === 'ValidationError') {
-      const messages = Object.values(err.errors).map(error => error.message);
-      return res.status(400).json({
-        success: false,
-        message: messages.join(', ')
-      });
-    }
-    
+  } catch (error) {
+    console.error('Profile update error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating profile'
+      message: 'Failed to update profile'
     });
   }
 });

@@ -268,7 +268,6 @@ const updateProfile = async (userData: {
   branch?: string;
   semester?: string;
   mobile?: string;
-  college?: string;
   role?: string;
 }) => {
   try {
