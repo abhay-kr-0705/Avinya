@@ -360,10 +360,10 @@ const Home = () => {
                     </div>
 
                     <Link 
-                      to={`/events/${event.id}/register`} 
+                      to={`/events/${event.id}`} 
                       className="w-full primary-button inline-flex items-center justify-center"
                     >
-                      Register Now
+                      View Details
                       <ChevronRight className="ml-1 h-5 w-5" />
                     </Link>
                   </div>

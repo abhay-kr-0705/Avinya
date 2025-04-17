@@ -268,6 +268,7 @@ const updateProfile = async (userData: {
   branch?: string;
   semester?: string;
   mobile?: string;
+  college?: string;
   role?: string;
 }) => {
   try {
@@ -489,11 +490,23 @@ const registerForEvent = async (
     registration_no: string;
     mobile_no: string;
     semester: string;
+    college?: string;
+    teamName?: string;
+    members?: any[];
+    registrationId?: string;
   }
 ) => {
   try {
-    const response = await api.post(`/events/${eventId}/register`, registrationData);
-    return response.data;
+    // If registrationId is provided, we're editing an existing registration
+    if (registrationData.registrationId) {
+      const { registrationId, ...updateData } = registrationData;
+      const response = await api.put(`/events/${eventId}/registrations/${registrationId}`, updateData);
+      return response.data;
+    } else {
+      // For new registrations, use POST
+      const response = await api.post(`/events/${eventId}/register`, registrationData);
+      return response.data;
+    }
   } catch (error) {
     handleApiError(error);
     throw error;

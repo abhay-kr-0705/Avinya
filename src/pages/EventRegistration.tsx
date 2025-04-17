@@ -100,7 +100,7 @@ const EventRegistration = () => {
     registration_no: user?.registration_no || '',
     mobile_no: user?.mobile || '',
     semester: user?.semester || '',
-    college: '',
+    college: user?.college || '',
     isGroupRegistration: false,
     teamName: '',
     members: [],
