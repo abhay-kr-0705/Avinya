@@ -22,7 +22,16 @@ const eventRegistrationSchema = new mongoose.Schema({
   mobile_no: {
     type: String,
     required: [true, 'Please provide your mobile number'],
-    match: [/^[0-9]{10}$/, 'Please provide a valid 10-digit mobile number']
+    validate: {
+      validator: function(v) {
+        // Remove any non-digit characters (including +)
+        const digits = v.replace(/\D/g, '');
+        // Check if the remaining digits form a valid mobile number
+        // For Indian numbers: either 10 digits, or 11-12 digits starting with country code
+        return /^(\d{10}|\d{11,12})$/.test(digits);
+      },
+      message: 'Please provide a valid mobile number'
+    }
   },
   semester: {
     type: String,

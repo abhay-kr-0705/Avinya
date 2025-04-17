@@ -498,9 +498,11 @@ const EventRegistration = () => {
                       name="mobile_no"
                       value={form.mobile_no}
                       onChange={handleChange}
+                      placeholder="10 digits (e.g., 9876543210 or +91 9876543210)"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
                       required
                     />
+                    <p className="mt-1 text-xs text-gray-500">You can include +91 prefix or just enter 10 digits</p>
                   </div>
                   
                   <div>
@@ -662,9 +664,11 @@ const EventRegistration = () => {
                               type="tel"
                               value={member.mobile_no}
                               onChange={(e) => handleMemberChange(index, 'mobile_no', e.target.value)}
+                              placeholder="10 digits (e.g., 9876543210 or +91 9876543210)"
                               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
                               required
                             />
+                            <p className="mt-1 text-xs text-gray-500">You can include +91 prefix or just enter 10 digits</p>
                           </div>
                           
                           <div>
